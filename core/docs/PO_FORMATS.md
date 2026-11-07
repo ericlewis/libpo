@@ -36,7 +36,7 @@ that does not require assigning those bytes a musical role.
 
 | Family | Established capabilities | Main remaining gaps |
 | --- | --- | --- |
-| PO-32 | Mono modem, drum patch parameters, synthesis and pattern editing | Some per-step/control bits and slot-marker receive behavior; typed chain/trigger preservation limits |
+| PO-32 | Mono modem, drum patch parameters, synthesis and pattern editing; lossless state/full-pattern record views | Some per-step/control bits and slot-marker receive behavior; legacy semantic APIs retain chain/trigger limits |
 | PO-33 / PO-133 | Stereo modem, lossless records, sample codec/resampling and shared-pool topology; PO-33 replacement/growth, melodic insertion and copied-sound detachment readbacks/playback | Exact range endpoints and slice mapping, shared-owner relocation, full note/timing/parameter scales, most FX codes and retained-state update rules, maximum storage capacity |
 | PO-35 / PO-137 | Stereo modem, lossless records, speech-group replacement and approximate PCM speech analysis/rendering; shared PO-32 drum patch codec; PO-35 root/tone storage and speech onset, continuation, note/gate playback observations | Indexed voice/effect tables, exact speech gain/noise and synthesis behavior, root acoustic scale and other header metadata, key/scale maps, gate timing, rare events and other control semantics; arbitrary generated speech acceptance |
 
@@ -133,9 +133,10 @@ shapes do not make the sound codecs interchangeable.
 
 ## Limits
 
-The PO-33/35 structural codecs preserve record bytes. The
-[PO-32 typed limits](formats/PO32.md) require raw packets for exact preservation
-in some cases. Observed field
+The PO-33/35 structural codecs and PO-32 lossless state/pattern codecs preserve
+record bytes. The [legacy PO-32 semantic APIs](formats/PO32.md) retain their
+chain and trigger limits; select the raw record codecs or raw packets when
+preservation is required. Observed field
 roles do not establish complete numeric laws. Selected rebuilt PO-33 backups
 and PCM sample replacements have user-confirmed device acceptance, and
 selected test banks have byte-identical device readbacks. The integrated editor's
