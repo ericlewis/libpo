@@ -59,7 +59,7 @@ static int po32_memcmp(const void *a, const void *b, size_t n) {
    near-empty accumulator yields dot == 0 and would fabricate a 1 bit. */
 #define PO32_FLUSH_MIN_SYMBOL_PHASE 0.5f
 
-#define PO32_STATE_PAYLOAD_MIN_BYTES ((size_t)PO32_STATE_MORPH_PAIR_COUNT * 2u + 3u)
+#define PO32_STATE_PAYLOAD_MIN_BYTES ((size_t)PO32_STATE_BASE_BYTES)
 #define PO32_PATTERN_LANE_BYTES      ((size_t)PO32_PATTERN_LANE_COUNT * (size_t)PO32_PATTERN_STEP_COUNT)
 
 #define PO32_PATCH_SIDE_LEFT_PREFIX  0x10u
@@ -77,7 +77,7 @@ typedef struct {
 static const po32_tag_spec_t po32_tag_specs[] = {
     {PO32_TAG_PATCH, PO32_PATCH_PAYLOAD_BYTES, PO32_PATCH_PAYLOAD_BYTES},
     {PO32_TAG_PATTERN, PO32_PATTERN_PAYLOAD_BYTES, PO32_PATTERN_PAYLOAD_BYTES},
-    {PO32_TAG_STATE, PO32_STATE_PAYLOAD_MIN_BYTES, 70u},
+    {PO32_TAG_STATE, PO32_STATE_PAYLOAD_MIN_BYTES, PO32_MAX_PAYLOAD},
     {PO32_TAG_KNOB, 2u, 2u},
     {PO32_TAG_RESET, 1u, 1u},
     {PO32_TAG_ERASE, 1u, 1u},
@@ -745,6 +745,89 @@ static po32_status_t po32_reset_packet_decode(const uint8_t *data, size_t len,
   if (len < 1u)
     return PO32_ERR_FRAME;
   out->instrument = (uint8_t)((data[0] & 0x0Fu) + 1u);
+  return PO32_OK;
+}
+
+po32_status_t po32_state_raw_decode(const uint8_t *data, size_t len, po32_state_raw_t *out) {
+  if (data == NULL || out == NULL)
+    return PO32_ERR_INVALID_ARG;
+  if (len < PO32_STATE_BASE_BYTES || len > PO32_MAX_PAYLOAD ||
+      len != PO32_STATE_BASE_BYTES + (size_t)data[34])
+    return PO32_ERR_FRAME;
+  for (size_t i = 0u; i < PO32_STATE_MORPH_PAIR_COUNT; ++i) {
+    out->morph_pairs[i].flag = data[2u * i];
+    out->morph_pairs[i].morph = data[2u * i + 1u];
+  }
+  out->tempo = data[32];
+  out->swing_times_12 = data[33];
+  out->pattern_count = data[34];
+  po32_memcpy(out->pattern_numbers, data + PO32_STATE_BASE_BYTES, out->pattern_count);
+  return PO32_OK;
+}
+
+po32_status_t po32_state_raw_encode(const po32_state_raw_t *value, uint8_t *out, size_t capacity,
+                                    size_t *written) {
+  if (value == NULL || out == NULL)
+    return PO32_ERR_INVALID_ARG;
+  if (value->pattern_count > PO32_CHAIN_MAX_COUNT)
+    return PO32_ERR_RANGE;
+  size_t len = PO32_STATE_BASE_BYTES + value->pattern_count;
+  if (capacity < len)
+    return PO32_ERR_BUFFER_TOO_SMALL;
+  for (size_t i = 0u; i < PO32_STATE_MORPH_PAIR_COUNT; ++i) {
+    out[2u * i] = value->morph_pairs[i].flag;
+    out[2u * i + 1u] = value->morph_pairs[i].morph;
+  }
+  out[32] = value->tempo;
+  out[33] = value->swing_times_12;
+  out[34] = (uint8_t)value->pattern_count;
+  po32_memcpy(out + PO32_STATE_BASE_BYTES, value->pattern_numbers, value->pattern_count);
+  if (written != NULL)
+    *written = len;
+  return PO32_OK;
+}
+
+po32_status_t po32_pattern_raw_decode(const uint8_t *data, size_t len, po32_pattern_raw_t *out) {
+  if (data == NULL || out == NULL)
+    return PO32_ERR_INVALID_ARG;
+  if (len != PO32_PATTERN_PAYLOAD_BYTES)
+    return PO32_ERR_FRAME;
+  out->pattern_number = data[0];
+  size_t pos = 1u;
+  for (size_t lane = 0u; lane < PO32_PATTERN_LANE_COUNT; ++lane) {
+    po32_memcpy(out->triggers[lane], data + pos, PO32_PATTERN_STEP_COUNT);
+    pos += PO32_PATTERN_STEP_COUNT;
+    for (size_t step = 0u; step < PO32_PATTERN_STEP_COUNT; ++step) {
+      out->morph_lanes[lane][step].flag = data[pos++];
+      out->morph_lanes[lane][step].morph = data[pos++];
+    }
+  }
+  po32_memcpy(out->reserved, data + pos, PO32_PATTERN_RESERVED_COUNT);
+  pos += PO32_PATTERN_RESERVED_COUNT;
+  out->accent_bits = (uint16_t)data[pos] | (uint16_t)((uint16_t)data[pos + 1u] << 8);
+  return PO32_OK;
+}
+
+po32_status_t po32_pattern_raw_encode(const po32_pattern_raw_t *value, uint8_t *out,
+                                      size_t capacity) {
+  if (value == NULL || out == NULL)
+    return PO32_ERR_INVALID_ARG;
+  if (capacity < PO32_PATTERN_PAYLOAD_BYTES)
+    return PO32_ERR_BUFFER_TOO_SMALL;
+  out[0] = value->pattern_number;
+  size_t pos = 1u;
+  for (size_t lane = 0u; lane < PO32_PATTERN_LANE_COUNT; ++lane) {
+    po32_memcpy(out + pos, value->triggers[lane], PO32_PATTERN_STEP_COUNT);
+    pos += PO32_PATTERN_STEP_COUNT;
+    for (size_t step = 0u; step < PO32_PATTERN_STEP_COUNT; ++step) {
+      out[pos++] = value->morph_lanes[lane][step].flag;
+      out[pos++] = value->morph_lanes[lane][step].morph;
+    }
+  }
+  po32_memcpy(out + pos, value->reserved, PO32_PATTERN_RESERVED_COUNT);
+  pos += PO32_PATTERN_RESERVED_COUNT;
+  out[pos++] = (uint8_t)value->accent_bits;
+  out[pos] = (uint8_t)(value->accent_bits >> 8);
   return PO32_OK;
 }
 
