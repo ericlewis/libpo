@@ -52,8 +52,9 @@ typedef struct po33_pattern_fx {
 
 typedef struct po33_pattern_event {
   /* LE24 parameter word: observed pitch, level and filter roles; FILTER B
-   * (resonance) occupies bits 18..23. Other field widths and numeric scales
-   * remain raw. Preserve parameter-only rows when control_raw is zero. */
+   * (resonance) occupies bits 18..23 on PO-33 and PO-133. Other field widths
+   * and numeric scales remain raw. Preserve parameter-only rows when
+   * control_raw is zero. */
   uint8_t event_raw[3];
   /* Note/key-related low nibble; timing-related high nibble (melodic length
    * or drum retrigger context). Exact numeric mappings remain unresolved. */
@@ -385,9 +386,10 @@ po_status_t po33_pattern_control_encode(const po33_pattern_control_t *value, uin
  * pointers return PO_ERR_INVALID_ARG. Failures leave outputs unchanged.
  * The getter's output must not overlap the event. No allocation is used.
  *
- * PO-33 FILTER B endpoint readbacks emitted 0 and 63. Accepting all six-bit
- * codes preserves their representation; it does not establish intermediate
- * UI values, a resonance/Q scale, zero behavior or PO-133 playback parity. */
+ * Separate PO-33 and PO-133 FILTER B endpoint readbacks emitted 0 and 63.
+ * Accepting all six-bit codes preserves their representation; it does not
+ * establish intermediate UI values, a resonance/Q scale, zero behavior in
+ * other contexts or general playback parity between the two devices. */
 po_status_t po33_pattern_event_get_resonance(const po33_pattern_event_t *event,
                                              uint8_t *out_resonance_raw);
 po_status_t po33_pattern_event_set_resonance(po33_pattern_event_t *event, uint8_t resonance_raw);
