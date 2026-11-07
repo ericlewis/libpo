@@ -25,6 +25,21 @@ po_status_t po33_pattern_control_encode(const po33_pattern_control_t *value, uin
   *out_raw = (uint8_t)((value->timing_raw << 4) | value->note_raw);
   return PO_OK;
 }
+po_status_t po33_pattern_event_get_resonance(const po33_pattern_event_t *event,
+                                             uint8_t *out_resonance_raw) {
+  if (event == NULL || out_resonance_raw == NULL)
+    return PO_ERR_INVALID_ARG;
+  *out_resonance_raw = (uint8_t)(event->event_raw[2] >> 2);
+  return PO_OK;
+}
+po_status_t po33_pattern_event_set_resonance(po33_pattern_event_t *event, uint8_t resonance_raw) {
+  if (event == NULL)
+    return PO_ERR_INVALID_ARG;
+  if (resonance_raw > 63u)
+    return PO_ERR_RANGE;
+  event->event_raw[2] = (uint8_t)((event->event_raw[2] & 3u) | (resonance_raw << 2));
+  return PO_OK;
+}
 po_status_t po33_pattern_fx_decode(const uint8_t *data, size_t len, po33_pattern_fx_t *out) {
   if (data == NULL || out == NULL)
     return PO_ERR_INVALID_ARG;
