@@ -30,6 +30,9 @@ extern "C" {
 #define PO32_PATTERN_RESERVED_COUNT         16
 #define PO32_PATTERN_PAYLOAD_BYTES          211
 #define PO32_PATCH_PAYLOAD_BYTES            43
+#define PO32_STATE_BASE_BYTES               35u
+/* Capacity of a single state payload, not a measured hardware chain limit. */
+#define PO32_CHAIN_MAX_COUNT (PO32_MAX_PAYLOAD - PO32_STATE_BASE_BYTES)
 
 #define PO32_TAG_PATCH   0x37B2u
 #define PO32_TAG_RESET   0x4AB4u
@@ -162,8 +165,8 @@ typedef struct po32_state_packet {
   po32_morph_pair_t morph_pairs[PO32_STATE_MORPH_PAIR_COUNT];
   uint8_t tempo;
   uint8_t swing_times_12;
-  /* Typed capacity is 16, not a wire limit; official captures include 22.
-   * Preserve larger chains through raw packets. */
+  /* Legacy capacity is 16; use po32_state_raw_t for larger chains without
+   * changing this struct's layout or the generic packet codec behavior. */
   uint8_t pattern_numbers[PO32_PATTERN_STEP_COUNT];
   size_t pattern_count;
 } po32_state_packet_t;
@@ -193,6 +196,45 @@ typedef struct po32_pattern_packet {
   uint8_t reserved[PO32_PATTERN_RESERVED_COUNT];
   uint16_t accent_bits;
 } po32_pattern_packet_t;
+
+/* Lossless record views, separate from the legacy semantic packet structs.
+ * Raw codes are preserved without asserting hardware acceptance or playback
+ * meaning. Do not pass these types to po32_packet_encode/po32_packet_decode
+ * or the legacy po32_pattern_* construction helpers. */
+typedef struct po32_state_raw {
+  po32_morph_pair_t morph_pairs[PO32_STATE_MORPH_PAIR_COUNT];
+  uint8_t tempo;
+  uint8_t swing_times_12;
+  uint8_t pattern_numbers[PO32_CHAIN_MAX_COUNT]; /* Ordered entries; repeats retained. */
+  size_t pattern_count;
+} po32_state_raw_t;
+
+typedef struct po32_pattern_raw {
+  uint8_t pattern_number;
+  /* Lane, then step. Includes inactive selector/accent bits and unknown bit 6. */
+  uint8_t triggers[PO32_PATTERN_LANE_COUNT][PO32_PATTERN_STEP_COUNT];
+  po32_morph_pair_t morph_lanes[PO32_PATTERN_LANE_COUNT][PO32_PATTERN_STEP_COUNT];
+  uint8_t reserved[PO32_PATTERN_RESERVED_COUNT];
+  uint16_t accent_bits; /* Stored independently; never inferred from triggers. */
+} po32_pattern_raw_t;
+
+/* Lossless logical payload codecs; no allocation, normalization or FX rules.
+ * State decode requires exactly 35 + count bytes, at most PO32_MAX_PAYLOAD;
+ * unused pattern_numbers entries are untouched. State payloads with trailing
+ * extension bytes or inconsistent counts must remain raw packets. Pattern
+ * decode requires exactly PO32_PATTERN_PAYLOAD_BYTES bytes.
+ * Null required pointers return INVALID_ARG; malformed decode lengths return
+ * FRAME. State encode counts above PO32_CHAIN_MAX_COUNT return RANGE; short
+ * output capacity returns BUFFER_TOO_SMALL. All failures leave outputs
+ * unchanged. Successful encoding leaves bytes beyond the payload untouched.
+ * State encode optionally returns the payload length in written on success.
+ * Inputs, outputs and written storage must be disjoint. */
+po32_status_t po32_state_raw_decode(const uint8_t *data, size_t len, po32_state_raw_t *out);
+po32_status_t po32_state_raw_encode(const po32_state_raw_t *value, uint8_t *out, size_t capacity,
+                                    size_t *written);
+po32_status_t po32_pattern_raw_decode(const uint8_t *data, size_t len, po32_pattern_raw_t *out);
+po32_status_t po32_pattern_raw_encode(const po32_pattern_raw_t *value, uint8_t *out,
+                                      size_t capacity);
 
 /* Split/combine every bit of a raw trigger byte, including inactive selector
  * and accent bits and unassigned bit 6. Decode accepts all 256 byte values;
