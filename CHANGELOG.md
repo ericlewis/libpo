@@ -7,6 +7,8 @@ The format is based on Keep a Changelog, and the project follows Semantic Versio
 ## [Unreleased]
 
 ### Added
+- Raw PO-33/133 resonance getter/setter preserving the other parameter and
+  control bits, with hardware-backed endpoint documentation.
 - Lossless PO-35/137 speech-event views for slot, event, note and gate codes,
   preserving unnamed values and retained inactive state.
 - Standalone PO-33/133 melodic sound-transfer sizing and construction without

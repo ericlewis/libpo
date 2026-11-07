@@ -40,6 +40,97 @@ static void test_pattern_control_errors(void) {
     control.timing_raw = 12;
   }
 }
+static void test_resonance_golden_values(void) {
+  static const struct {
+    po33_pattern_event_t original;
+    uint8_t before, requested;
+    po33_pattern_event_t expected;
+  } cases[] = {
+      {{{0x11, 0xf8, 0x03}, 0xf7}, 0, 63, {{0x11, 0xf8, 0xff}, 0xf7}},
+      {{{0x11, 0xf8, 0xff}, 0xf7}, 63, 0, {{0x11, 0xf8, 0x03}, 0xf7}},
+      {{{0x00, 0x00, 0x00}, 0x00}, 0, 63, {{0x00, 0x00, 0xfc}, 0x00}},
+      {{{0xa5, 0x5a, 0xb5}, 0x12}, 45, 17, {{0xa5, 0x5a, 0x45}, 0x12}},
+  };
+  for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+    po33_pattern_event_t event = cases[i].original;
+    uint8_t value = 0xa5;
+    po_status_t status = po33_pattern_event_get_resonance(&event, &value);
+    assert(status == PO_OK && value == cases[i].before);
+    assert(memcmp(&event, &cases[i].original, sizeof(event)) == 0);
+    status = po33_pattern_event_set_resonance(&event, cases[i].requested);
+    assert(status == PO_OK);
+    assert(memcmp(&event, &cases[i].expected, sizeof(event)) == 0);
+    status = po33_pattern_event_get_resonance(&event, &value);
+    assert(status == PO_OK && value == cases[i].requested);
+  }
+}
+static void test_resonance_codes_and_preservation(void) {
+  /* Cover all original high bytes and all stored resonance codes, including
+   * every combination of the two neighboring bits that must be retained. */
+  for (unsigned int original = 0; original <= UINT8_MAX; ++original) {
+    for (unsigned int code = 0; code < 64u; ++code) {
+      po33_pattern_event_t event = {
+          {(uint8_t)(original * 73u + 19u), (uint8_t)(255u - original), (uint8_t)original},
+          (uint8_t)(original ^ 0x5au)};
+      const po33_pattern_event_t before = event;
+      uint8_t value = 0xa5;
+      po_status_t status = po33_pattern_event_get_resonance(&event, &value);
+      assert(status == PO_OK && value == original / 4u);
+      status = po33_pattern_event_set_resonance(&event, (uint8_t)code);
+      assert(status == PO_OK);
+      assert(event.event_raw[0] == before.event_raw[0]);
+      assert(event.event_raw[1] == before.event_raw[1]);
+      assert((event.event_raw[2] & 3u) == (before.event_raw[2] & 3u));
+      assert(event.control_raw == before.control_raw);
+      status = po33_pattern_event_get_resonance(&event, &value);
+      assert(status == PO_OK && value == code);
+    }
+  }
+}
+static void test_resonance_edit_locality(void) {
+  uint8_t wire[PO33_PATTERN_BYTES], expected[PO33_PATTERN_BYTES], encoded[PO33_PATTERN_BYTES];
+  for (size_t i = 0; i < sizeof(wire); ++i)
+    wire[i] = (uint8_t)(i * 29u + i / 256u);
+  for (size_t step = 0; step < PO33_STEP_COUNT; ++step) {
+    for (size_t sound = 0; sound < PO33_SOUND_COUNT; ++sound) {
+      po33_pattern_t pattern;
+      const size_t offset = 3u * (step * PO33_SOUND_COUNT + sound) + 2u;
+      po_status_t status = po33_pattern_decode(wire, sizeof(wire), &pattern);
+      assert(status == PO_OK);
+      status = po33_pattern_event_set_resonance(&pattern.events[step][sound], 63);
+      assert(status == PO_OK);
+      memcpy(expected, wire, sizeof(expected));
+      expected[offset] |= 0xfcu;
+      status = po33_pattern_encode(&pattern, encoded, sizeof(encoded));
+      assert(status == PO_OK && memcmp(encoded, expected, sizeof(expected)) == 0);
+      status = po33_pattern_event_set_resonance(&pattern.events[step][sound], 0);
+      assert(status == PO_OK);
+      expected[offset] &= 3u;
+      status = po33_pattern_encode(&pattern, encoded, sizeof(encoded));
+      assert(status == PO_OK && memcmp(encoded, expected, sizeof(expected)) == 0);
+    }
+  }
+}
+static void test_resonance_errors(void) {
+  po33_pattern_event_t event = {{0xa5, 0x5a, 0xc3}, 0xf7};
+  const po33_pattern_event_t before = event;
+  uint8_t value = 0xa5;
+  po_status_t status = po33_pattern_event_get_resonance(NULL, &value);
+  assert(status == PO_ERR_INVALID_ARG && value == 0xa5);
+  status = po33_pattern_event_get_resonance(&event, NULL);
+  assert(status == PO_ERR_INVALID_ARG);
+  status = po33_pattern_event_get_resonance(NULL, NULL);
+  assert(status == PO_ERR_INVALID_ARG);
+  status = po33_pattern_event_set_resonance(NULL, 0);
+  assert(status == PO_ERR_INVALID_ARG);
+  status = po33_pattern_event_set_resonance(NULL, 64);
+  assert(status == PO_ERR_INVALID_ARG);
+  for (unsigned int invalid = 64; invalid <= UINT8_MAX; ++invalid) {
+    status = po33_pattern_event_set_resonance(&event, (uint8_t)invalid);
+    assert(status == PO_ERR_RANGE);
+    assert(memcmp(&event, &before, sizeof(event)) == 0);
+  }
+}
 static void test_pattern_fx_order_and_preservation(void) {
   const uint8_t wire[PO33_PATTERN_FX_BYTES] = {0x6f, 0x01, 0x23, 0x45, 0x78, 0x9a, 0xbc, 0xde};
   const po33_pattern_fx_t expected = {
@@ -246,6 +337,10 @@ static void test_sound(void) {
 int main(void) {
   test_pattern_control_roundtrip();
   test_pattern_control_errors();
+  test_resonance_golden_values();
+  test_resonance_codes_and_preservation();
+  test_resonance_edit_locality();
+  test_resonance_errors();
   test_pattern_fx_order_and_preservation();
   test_pattern_fx_errors();
   test_pattern_control_edit_locality();
