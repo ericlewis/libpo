@@ -189,6 +189,41 @@ static int seed_packet_decode(void) {
   memcpy(seed + 3u, wire.payload, wire.payload_len);
   failures += seed_write("packet_decode", "pattern", seed, 3u + wire.payload_len);
 
+  {
+    po32_state_raw_t raw_state = {0};
+    const size_t chain_counts[] = {22u, PO32_CHAIN_MAX_COUNT};
+    const char *names[] = {"state_long", "state_max"};
+    po32_morph_pairs_default(raw_state.morph_pairs, PO32_STATE_MORPH_PAIR_COUNT);
+    raw_state.tempo = 120u;
+    raw_state.swing_times_12 = 6u;
+    for (size_t i = 0u; i < PO32_CHAIN_MAX_COUNT; ++i)
+      raw_state.pattern_numbers[i] = (uint8_t)(i % PO32_PATTERN_STEP_COUNT);
+    seed[0] = 3u;
+    for (size_t i = 0u; i < sizeof(chain_counts) / sizeof(chain_counts[0]); ++i) {
+      size_t written = 0u;
+      raw_state.pattern_count = chain_counts[i];
+      fuzz_check(po32_state_raw_encode(&raw_state, seed + 3u, PO32_MAX_PAYLOAD, &written) ==
+                 PO32_OK);
+      failures += seed_write("packet_decode", names[i], seed, 3u + written);
+    }
+  }
+
+  {
+    po32_pattern_raw_t raw_pattern = {0};
+    raw_pattern.pattern_number = 1u;
+    raw_pattern.triggers[0][0] = 0x80u; /* Inactive, with retained accent. */
+    raw_pattern.triggers[0][1] = 0xB0u; /* Inactive, with selector and accent. */
+    raw_pattern.triggers[1][0] = 0x41u; /* Active low code and unassigned bit 6. */
+    raw_pattern.triggers[3][15] = 0xFFu;
+    raw_pattern.morph_lanes[0][0].flag = 0x80u;
+    raw_pattern.morph_lanes[0][0].morph = 0x01u;
+    raw_pattern.reserved[15] = 0xABu;
+    raw_pattern.accent_bits = 0x4004u; /* Independent retained mask. */
+    seed[0] = 4u;
+    fuzz_check(po32_pattern_raw_encode(&raw_pattern, seed + 3u, PO32_MAX_PAYLOAD) == PO32_OK);
+    failures += seed_write("packet_decode", "pattern_raw", seed, 3u + PO32_PATTERN_PAYLOAD_BYTES);
+  }
+
   return failures;
 }
 

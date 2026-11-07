@@ -5,6 +5,8 @@
  * escape hatch for arbitrary 16-bit tags). Whenever a payload decodes, the
  * result is re-encoded and decoded again: the second decode must succeed and
  * produce exactly the same typed packet (decode∘encode must be idempotent).
+ * Raw state and pattern codecs additionally preserve the input payload exactly,
+ * including longer chains and trigger bits the legacy packet views normalize.
  */
 
 #include "po32.h"
@@ -82,6 +84,26 @@ static void fuzz_compare_pattern(const po32_pattern_packet_t *a, const po32_patt
   }
 }
 
+static void fuzz_check_raw_roundtrip(uint16_t tag, const uint8_t *data, size_t size) {
+  uint8_t encoded[PO32_MAX_PAYLOAD];
+  if (tag == PO32_TAG_STATE) {
+    po32_state_raw_t state;
+    size_t written = 0u;
+    if (po32_state_raw_decode(data, size, &state) == PO32_OK) {
+      fuzz_check(po32_state_raw_encode(&state, encoded, sizeof(encoded), &written) == PO32_OK);
+      fuzz_check(written == size);
+      fuzz_check(memcmp(encoded, data, size) == 0);
+    }
+  } else if (tag == PO32_TAG_PATTERN) {
+    po32_pattern_raw_t pattern;
+    if (po32_pattern_raw_decode(data, size, &pattern) == PO32_OK) {
+      fuzz_check(size == PO32_PATTERN_PAYLOAD_BYTES);
+      fuzz_check(po32_pattern_raw_encode(&pattern, encoded, sizeof(encoded)) == PO32_OK);
+      fuzz_check(memcmp(encoded, data, size) == 0);
+    }
+  }
+}
+
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   fuzz_typed_packet_t first, second;
   po32_packet_t wire;
@@ -98,6 +120,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   }
   data += 3u;
   size -= 3u;
+
+  /* Run before the legacy decoder rejects chains longer than sixteen. */
+  fuzz_check_raw_roundtrip(tag, data, size);
 
   memset(&first, 0, sizeof(first));
   if (po32_packet_decode(tag, data, size, &first) != PO32_OK) {
