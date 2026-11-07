@@ -157,10 +157,10 @@ does not carry over to PO-32, despite the matching 48-byte drum-lane shape.
 PO-33 stores parameters for all sixteen sounds at every step rather than one
 selected instrument per lane. Bit 5 of the first parameter byte was zero in
 all **16,384 cells** examined here. This is consistent with the existing
-5+7+6+6 versus 6+6+6+6 ambiguity in the lower fields. A later isolated
-[FILTER B comparison](PO33.md#resonance-storage-validation) identifies the
-resonance footprint at bits 18..23 without resolving the remaining widths
-or acoustic scales.
+5+7+6+6 versus 6+6+6+6 ambiguity in the lower fields. Later isolated
+[FILTER B comparisons](PO33.md#resonance-storage-validation) on PO-33 and PO-133
+identify the resonance footprint at bits 18..23 and endpoint codes 0/63,
+without resolving the remaining widths or acoustic scales.
 Its low/high control nibbles and packed global FX must not be substituted for
 PO-32 triggers or PO-35 speech events solely because all are step controls.
 
@@ -189,7 +189,12 @@ or a common sample-count/trim interpretation.
 ## 6. PO-133 and PO-137 are family variants, not a third common format
 
 The inspected PO-133 bank fits the PO-33 settings, pattern, selector, pool and
-sample grammar. PO-137 fits PO-35's speech, table, drum-patch and pattern grammar.
+sample grammar. Independent PO-133 knob readbacks also confirm the PO-33
+resonance storage mapping. Turning B back to its original endpoint restored
+the complete original bank. This does not establish general playback parity
+or PO-133 receive/sample-edit behavior.
+
+PO-137 fits PO-35's speech, table, drum-patch and pattern grammar.
 Treat these as two model families. The two public speech references differ in
 six indexed-table records as well as their content; shared record shapes do not
 mean identical voice definitions.

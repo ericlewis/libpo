@@ -157,12 +157,14 @@ The sampler's settings prefix and suffix each have only one byte profile
 across all 187 states. They do not provide a varying knob-default table here.
 The location or serialization of standalone sampler defaults remains open.
 Its parameter word also keeps bit 5 clear in all 2,776 nonzero words examined;
-that still does not distinguish the lower pitch/level widths. A separate later
-[hardware comparison](PO33.md#resonance-storage-validation) identifies FILTER B
-with bits 18..23 and endpoints 0/63, while preserving every other field. This
-rules out the simple independent packing that assigns bit 18 to FILTER A and
+that still does not distinguish the lower pitch/level widths. Separate later
+[PO-33 and PO-133 hardware comparisons](PO33.md#resonance-storage-validation)
+identify FILTER B with bits 18..23 and endpoints 0/63, while preserving every
+other field in each bank. This rules out the simple independent packing that
+assigns bit 18 to FILTER A and
 only bits 19..23 to B. The lower-field alternatives and acoustic scales remain
-unresolved; the new observation does not alter the offline corpus counts above.
+unresolved; these hardware comparisons do not alter the offline corpus counts
+above.
 
 ## FX correspondence and useful predictions
 
