@@ -2,10 +2,16 @@
 
 [Format overview](../PO_FORMATS.md) · [PO-32](PO32.md) · [PO-33/133](PO33.md) · [PO-35/137](PO35.md)
 
-The formats share a packet system and several musical concepts, but they are
-not one layout with different sound bodies. **PO-35 is the bridge:** it shares
-PO-33's stereo transport and PO-32's drum-patch representation. Its settings
-and drum-pattern organization are also closer to PO-32 than to PO-33.
+The formats are useful to compare as variants of a common sequencer and
+sound-reference model: chains select patterns, steps refer to sounds, and
+parameter/control state is stored separately from sound data. The
+[shared field map](SEQUENCER_ALIGNMENT.md) aligns those roles across 341
+distinct frames, preserving different packing, absent cells and unknown values.
+
+**PO-35 is the transport and sound-codec bridge:** it shares PO-33's stereo
+transport and PO-32's drum-patch representation. Its drum settings and lane
+layout also provide direct correspondences with PO-32. These relationships
+support shared concepts without requiring identical bytes or playback laws.
 
 For ranked interpretations of unresolved fields and tests that distinguish
 them, see [what the remaining fields could mean](FIELD_HYPOTHESES.md).
@@ -103,6 +109,13 @@ explained by these sequences. Its observed selection/FX relationships remain
 documented in the [state guide](PO33_EFFECTS_STATE.md).
 
 ## 4. Patterns reuse a design vocabulary, but the storage axes differ
+
+The dense sampler grid and compact drum/speech lanes can be projected into
+the same logical step/sound coordinates. The sound column is an implicit
+reference on PO-33; selectors inside event bytes supply more of that coordinate
+on PO-32/35. This is a grid of sequencer data, not duplicated sound objects.
+The [alignment](SEQUENCER_ALIGNMENT.md#align-by-role) retains lane provenance
+and unassigned bits so that all inspected patterns can be rebuilt exactly.
 
 The exact byte accounting is:
 
