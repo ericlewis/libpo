@@ -26,6 +26,9 @@ Use the [C API guide](C_API.md) for function contracts and the
 See the [cross-family analysis](formats/FAMILY_RELATIONSHIPS.md) for measured
 relationships between framing, drum patches, settings and pattern layouts,
 including the new sound-only receiver evidence.
+The [shared sequencer field map](formats/SEQUENCER_ALIGNMENT.md) compares
+chains, sound references, controls and retained state by logical role before
+comparing their byte offsets or numeric interpretation.
 
 Transport and record layout are better understood than every field's playback
 meaning. Tested banks can be decoded and rebuilt while retaining unknown bytes;
