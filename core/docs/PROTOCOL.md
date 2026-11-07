@@ -90,9 +90,25 @@ there is no typed packet decoder for this tag.
 Use [`po32_tag_name(...)`](../include/po32.h) for a
 human-readable tag name.
 
+State payloads are admitted at 35..255 bytes by both the frame parser and
+streaming demodulator. The raw state record codec requires exactly
+`35 + pattern_count` bytes, allowing up to 220 chain entries within that
+envelope. This is a representation capacity, not a verified device maximum.
+Count/length inconsistencies or trailing extension bytes can be retained as
+raw packets, but are rejected by the record codec to prevent data loss.
+
+## Lossless Records
+
+`po32_state_raw_t` and `po32_pattern_raw_t` expose complete state and full-pattern
+records without normalizing their data. Use `po32_state_raw_decode` /
+`po32_state_raw_encode` or `po32_pattern_raw_decode` /
+`po32_pattern_raw_encode`, then append the encoded payload with
+`po32_builder_append_packet`. They are separate from the legacy generic packet
+dispatch below. See the [lossless record API](api/PO32.md#lossless-state-and-pattern-records).
+
 ## Typed Packets
 
-The core provides typed packet structs:
+The existing generic packet API uses these compatibility structs:
 
 | Family | Struct |
 | --- | --- |
@@ -114,7 +130,7 @@ not raw lane bytes. Inactive trigger bytes are re-encoded as zero even when
 their original selector/accent bits were nonzero. This limits byte preservation;
 it does not establish a playback change. The typed state also holds only 16
 chain entries, fewer than the valid 22-entry chain in official Basic Beats 1.
-Keep raw packet payloads for exact backup preservation. See
+Use the lossless record codecs or raw packet payloads for exact backup preservation. See
 [PO-32 preservation limits](formats/PO32.md) for measured coverage and field limits.
 
 For normal pattern construction, prefer the `po32_pattern_*` helpers in
@@ -129,7 +145,7 @@ On the wire, each pattern payload is lane-chunked:
 4. `2` bytes accent bitmask, little-endian
 
 This totals `211` bytes. Construction helpers initialize the reserved bytes to
-zero; the typed codec preserves their supplied values. Despite the field name,
+zero; both record codecs preserve their supplied values. Despite the field name,
 these bytes contain independently varying per-step data in official packs.
 A control/effect role is plausible, but exact meanings are unresolved.
 
