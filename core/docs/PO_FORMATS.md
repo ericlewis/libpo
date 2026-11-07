@@ -42,6 +42,9 @@ that does not require assigning those bytes a musical role.
 
 PO-133 and PO-137 share the inspected 33/35 record grammars, respectively;
 that does not establish identical firmware, audio or physical cross-loading.
+Independent PO-33 and PO-133 [resonance readbacks](formats/PO33.md#resonance-storage-validation)
+also confirm the same FILTER B bits and endpoint codes on both models. That
+control-storage result does not validate PO-133 sample edits or receive behavior.
 The family references above distinguish verified layouts, observed roles and
 candidate interpretations. There is no meaningful single completion percentage
 across framing, byte preservation, musical semantics and device validation.
@@ -138,6 +141,6 @@ and PCM sample replacements have user-confirmed device acceptance, and
 selected test banks have byte-identical device readbacks. The integrated editor's
 [tested replacements](formats/PO33.md#sample-replacement-hardware-validation)
 include growth from 45,056 to 49,152 sample bytes. Those observations do not
-validate every input, other growth sizes, maximum capacity, PO-133 hardware,
-or generated PO-35/137 speech. Software roundtrips and physical acceptance
-remain separate evidence.
+validate every input, other growth sizes, maximum capacity, PO-133 sample-edit
+acceptance or generated PO-35/137 speech. Software roundtrips and physical
+acceptance remain separate evidence.

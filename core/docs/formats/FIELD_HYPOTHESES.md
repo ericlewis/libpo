@@ -22,7 +22,7 @@ behavior changes follow from this guide.
 | PO-35 step state at 161..176 | Effect origin/reference or retained effect-edit history | Strong association with the suspected FX nibble; two counterexamples to a universal lookup |
 | PO-35 `F` when the speech slot changes | Replace the source of an ongoing voice | A stored slot change exists; its playback position/retrigger behavior is unresolved |
 | PO-33 state at 386..401 | Per-pattern retained FX/editor position or cached state | Better fit than a live playhead or occupancy map; update conditions unresolved |
-| PO-33 lower parameter fields and numeric scales | Packed pitch/level/filter controls alongside resonance | FILTER B bits 18..23 are identified; lower widths and acoustic curves remain unresolved |
+| PO-33/133 lower parameter fields and numeric scales | Packed pitch/level/filter controls alongside resonance | Independent FILTER B endpoint readbacks identify bits 18..23 on both models; lower widths and acoustic curves remain unresolved |
 | PO-35 footer byte 177 | Packed pattern key and scale | Plausible placement; two bit partitions remain indistinguishable |
 | PO-35 header byte 4 | Sample-associated BPM or timing reference | Better fit than current global BPM; no isolated sample-BPM edit |
 | PO-35 indexed tables | Voice/excitation and performance-effect definitions | Eight-entry organization fits the UI; field widths and most numeric laws unresolved |
@@ -31,7 +31,9 @@ behavior changes follow from this guide.
 Offsets are zero-based within decoded logical payloads. PO-33's record offsets
 are not packet offsets. Model-variant compatibility supports using one family
 codec; PO-35 findings are not independent physical validation on PO-137, nor
-PO-33 findings on PO-133.
+PO-33 findings on PO-133. PO-133 now has its own
+[resonance endpoint evidence](PO33.md#resonance-storage-validation); the other
+sampler field hypotheses still lack independent physical PO-133 validation.
 
 ## 1. A combined instrument ID explains two PO-35 clues
 
