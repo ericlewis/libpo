@@ -157,7 +157,10 @@ does not carry over to PO-32, despite the matching 48-byte drum-lane shape.
 PO-33 stores parameters for all sixteen sounds at every step rather than one
 selected instrument per lane. Bit 5 of the first parameter byte was zero in
 all **16,384 cells** examined here. This is consistent with the existing
-5+7+6+6 versus 6+6+6+6 ambiguity; it does not resolve the widths or q3's role.
+5+7+6+6 versus 6+6+6+6 ambiguity in the lower fields. A later isolated
+[FILTER B comparison](PO33.md#resonance-storage-validation) identifies the
+resonance footprint at bits 18..23 without resolving the remaining widths
+or acoustic scales.
 Its low/high control nibbles and packed global FX must not be substituted for
 PO-32 triggers or PO-35 speech events solely because all are step controls.
 

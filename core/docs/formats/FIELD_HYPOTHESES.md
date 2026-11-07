@@ -22,7 +22,7 @@ behavior changes follow from this guide.
 | PO-35 step state at 161..176 | Effect origin/reference or retained effect-edit history | Strong association with the suspected FX nibble; two counterexamples to a universal lookup |
 | PO-35 `F` when the speech slot changes | Replace the source of an ongoing voice | A stored slot change exists; its playback position/retrigger behavior is unresolved |
 | PO-33 state at 386..401 | Per-pattern retained FX/editor position or cached state | Better fit than a live playhead or occupancy map; update conditions unresolved |
-| PO-33 q3 | Resonance-related control | Plausible from the four knob functions; tested playback differences remain unresolved |
+| PO-33 lower parameter fields and numeric scales | Packed pitch/level/filter controls alongside resonance | FILTER B bits 18..23 are identified; lower widths and acoustic curves remain unresolved |
 | PO-35 footer byte 177 | Packed pattern key and scale | Plausible placement; two bit partitions remain indistinguishable |
 | PO-35 header byte 4 | Sample-associated BPM or timing reference | Better fit than current global BPM; no isolated sample-BPM edit |
 | PO-35 indexed tables | Voice/excitation and performance-effect definitions | Eight-entry organization fits the UI; field widths and most numeric laws unresolved |
@@ -152,13 +152,17 @@ Evidence and contrary cases: [PO-33 retained-state observations](PO33_EFFECTS_ST
 
 ## 5. Guess control roles before guessing exact scales
 
-**PO-33 q3:** resonance is the leading role because the official four lockable
-knob functions align with the observed pitch, level and filter behavior of the
-other chunks. The null q3 playback tests lower confidence in a simple direct
-mapping. Conditional filter behavior, weak sensitivity in the tested contexts,
-or different bit packing remain alternatives. Six-bit extraction does not prove
-six-bit fields: 6+6+6+6, 5+7+6+6 and 5+7+7+5 still need discrimination.
-The [parameter guide](PO33.md#pattern-parameters-and-controls) preserves these limits.
+**PO-33 parameter packing:** an isolated
+[FILTER B endpoint comparison](PO33.md#resonance-storage-validation) identifies
+bits 18..23 with emitted raw values 0 and 63. The other parameter bits and all
+control bytes stay unchanged, and the opposite endpoint returns the entire
+backup to its baseline. This contradicts a simple independent 5+7+7+5 split
+that assigns bit 18 exclusively to FILTER A. The lower pitch/level split remains
+compatible with 6+6+6+6 and 5+7+6+6; extraction ranges alone do not choose it.
+Earlier q3 playback comparisons did not resolve an audible difference. That
+limits the acoustic curve/activation model, not the new control-to-storage
+assignment. Keep numeric Q, intermediate hardware codes and context-dependent
+zero behavior separate from the known raw footprint.
 
 **PO-35 key/scale:** byte 177 can be partitioned as signed key shifted by two
 plus two scale bits, or shifted by three plus three low bits. Raw `2A` gives
