@@ -22,7 +22,7 @@ behavior changes follow from this guide.
 | PO-35 step state at 161..176 | Effect origin/reference or retained effect-edit history | Strong association with the suspected FX nibble; two counterexamples to a universal lookup |
 | PO-35 `F` when the speech slot changes | Replace the source of an ongoing voice | A stored slot change exists; its playback position/retrigger behavior is unresolved |
 | PO-33 state at 386..401 | Per-pattern retained FX/editor position or cached state | Better fit than a live playhead or occupancy map; update conditions unresolved |
-| PO-33/133 lower parameter fields and numeric scales | Packed pitch/level/filter controls alongside resonance | Independent FILTER B endpoint readbacks identify bits 18..23 on both models; lower widths and acoustic curves remain unresolved |
+| PO-33/133 lower parameter fields and numeric scales | Packed pitch/level/filter controls alongside resonance | Resonance storage is independently confirmed on both models; later PO-33 playback constrains transitions, bit 5 and coarse responses without completing field widths or numeric laws |
 | PO-35 footer byte 177 | Packed pattern key and scale | Plausible placement; two bit partitions remain indistinguishable |
 | PO-35 header byte 4 | Sample-associated BPM or timing reference | Better fit than current global BPM; no isolated sample-BPM edit |
 | PO-35 indexed tables | Voice/excitation and performance-effect definitions | Eight-entry organization fits the UI; field widths and most numeric laws unresolved |
@@ -165,6 +165,50 @@ Earlier q3 playback comparisons did not resolve an audible difference. That
 limits the acoustic curve/activation model, not the new control-to-storage
 assignment. Keep numeric Q, intermediate hardware codes and context-dependent
 zero behavior separate from the known raw footprint.
+
+Later [PO-33 bit-5 playback](PO33_CONTROLS.md#bit-5-survives-without-a-resolved-playback-effect)
+preserves the synthetic bit but resolves no pitch/gain change at two level
+settings. A simple extra +32-semitone role is contradicted there; ignored,
+reserved, quantized or clamped behavior remain alternatives. The observation
+does not locate the UI writer or complete the lower-field partition.
+
+### PO-33 pitch-rate model
+
+An economical fit to the older q0 recordings uses:
+
+```text
+N = round(1024 * 2^((q0 - 13) / 12))
+frequency = reference_frequency * N / 1024
+```
+
+A lower-frequency context fits `N - 4`. This model was selected
+retrospectively; the reference depends on the note/control and recording
+context. The later test froze the first-target contrast `1020/1024` before
+capture and [reproduced it](PO33_CONTROLS.md#first-note-pitch-offset-and-settling).
+Subsequent repeated targets returned to the reference pitch, so applying the
+offset indefinitely would be wrong in that sequence.
+
+Matching this prediction does not identify firmware precision, a smoothing
+algorithm or a complete pitch law. Finer representations can reproduce the
+same grid, and predecessor pattern identity remains a confounder. Do not
+apply the offset to every ascending note or expose this fit as a universal
+semitone conversion.
+
+### PO-33 gain, filter and zero-update candidates
+
+The [measured volume points](PO33_CONTROLS.md#coarse-volume-response) do not
+choose a universal gain function. The [filter responses](PO33_CONTROLS.md#coarse-filter-response)
+are compatible with low-pass-like and high-pass-like settings, but six signal
+lines do not determine a unique filter design or cutoff/Q law. The selected
+q2=63 reference is not a proven universal bypass.
+
+Volume zero after 7 and filter zero after 16 reproduced the preceding settings
+in the new sequences. This supports a retained-state candidate over simple
+mute/bypass behavior in those cases. Because the other controls stayed fixed,
+per-control retention and a zero-keyed whole-row skip are still indistinguishable.
+Do not import PO-35's independently tested continuation rules into the sampler.
+
+### Other speech-family control candidates
 
 **PO-35 key/scale:** byte 177 can be partitioned as signed key shifted by two
 plus two scale bits, or shifted by three plus three low bits. Raw `2A` gives
