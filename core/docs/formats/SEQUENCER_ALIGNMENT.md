@@ -166,6 +166,14 @@ only bits 19..23 to B. The lower-field alternatives and acoustic scales remain
 unresolved; these hardware comparisons do not alter the offline corpus counts
 above.
 
+A subsequent [PO-33 control test](PO33_CONTROLS.md) preserved synthetic bit 5
+through device readbacks without a resolved playback effect in the tested
+pairs. Selected volume/filter zeros reproduced the preceding settings, but
+the unchanged other controls leave per-control retention versus whole-row
+skipping unresolved. Shared architecture does not make these zeros equivalent
+to PO-35 continuation controls. These later tests do not extend the archived
+corpus counts or establish independent PO-133 playback behavior.
+
 ## FX correspondence and useful predictions
 
 PO-32's candidate FX code/reference pair is packed into one byte; PO-35's

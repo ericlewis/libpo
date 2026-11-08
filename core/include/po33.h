@@ -53,8 +53,11 @@ typedef struct po33_pattern_fx {
 typedef struct po33_pattern_event {
   /* LE24 parameter word: observed pitch, level and filter roles; FILTER B
    * (resonance) occupies bits 18..23 on PO-33 and PO-133. Other field widths
-   * and numeric scales remain raw. Preserve parameter-only rows when
-   * control_raw is zero. */
+   * and numeric scales remain raw. PO-33 playback found a first-note pitch
+   * offset and no resolved bit-5 effect in tested pairs; neither supplies a
+   * general conversion or normalization rule. Preserve bit 5, parameter zeros
+   * and parameter-only rows when control_raw is zero. Zero-update semantics
+   * remain unresolved; see docs/formats/PO33_CONTROLS.md. */
   uint8_t event_raw[3];
   /* Note/key-related low nibble; timing-related high nibble (melodic length
    * or drum retrigger context). Exact numeric mappings remain unresolved. */
