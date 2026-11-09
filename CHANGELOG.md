@@ -7,12 +7,21 @@ The format is based on Keep a Changelog, and the project follows Semantic Versio
 ## [Unreleased]
 
 ### Added
+- Semantic PO-32 patch FX helpers for fixed transforms, coupled pitch changes
+  and EQ snapshots, separate from stored effect codes and sequencer timing.
 - Raw PO-33/133 resonance getter/setter preserving the other parameter and
   control bits, with hardware-backed endpoint documentation.
 - Lossless PO-35/137 speech-event views for slot, event, note and gate codes,
   preserving unnamed values and retained inactive state.
 - Standalone PO-33/133 melodic sound-transfer sizing and construction without
   a source bank, reusing insertion's guard, allocation and packet layout.
+
+### Changed
+- PO-35/137 PCM analysis model 2 fits selected high-bank LPC coefficients
+  within the existing byte range. New encodes can change coefficient/gain bytes
+  and audio; public API layouts, workspace size, wire layout and synth model 1
+  remain unchanged. Fitting on real speech and physical-device playback remain
+  unverified.
 
 ## [2.0.0] - 2026-11-05
 
