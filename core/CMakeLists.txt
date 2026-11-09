@@ -45,6 +45,7 @@ add_library(po32 STATIC
   src/po_stereo.c
   src/po32_patch_import.c
   src/po32_synth.c
+  src/po32_fx.c
 )
 add_library(LibPO32::po32 ALIAS po32)
 add_library(LibPO::po ALIAS po32)
@@ -249,6 +250,13 @@ endif()
 add_executable(po32_synth_tests tests/test_synth.c)
 target_link_libraries(po32_synth_tests PRIVATE po32)
 
+add_executable(po32_fx_tests tests/test_po32_fx.c)
+target_link_libraries(po32_fx_tests PRIVATE po32)
+if(UNIX AND NOT APPLE)
+  target_link_libraries(po32_fx_tests PRIVATE m)
+endif()
+add_test(NAME po32_fx_tests COMMAND po32_fx_tests)
+
 add_executable(po32_pattern_editor_tests tests/test_example_pattern_editor.c)
 target_link_libraries(po32_pattern_editor_tests PRIVATE po32)
 
@@ -406,6 +414,7 @@ install(FILES
   include/po_stereo.h
   include/po33.h
   include/po32_synth.h
+  include/po32_fx.h
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
