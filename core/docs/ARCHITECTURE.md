@@ -124,6 +124,14 @@ workspace holds scratch state; input duration only changes the required output
 size. Analysis emits 44-byte records at 20, 40, 60 or 80 fps and zero-pads a
 partial final record. It does not allocate, normalize input or create a frame.
 
+Analysis model 2 fits selected high-bank filters within the existing LAR byte
+range, using four coordinate sweeps to reduce prediction error. Unsafe fits
+retain the original bounded coefficients. The public API and workspace layout
+remain unchanged; new encodes can change coefficient and shared-gain bytes.
+The record format and synthesis model 1 are unchanged. See the
+[speech analysis API](api/PO35.md#po-35-speech-analysis) for fitting conditions
+and compatibility limits.
+
 `po35_synth_voice_*` streams one borrowed speech group with fixed-size state.
 Frame boundaries use cumulative integer rounding; reset and arbitrary chunks
 produce the same output. Core speech output is finite, unnormalized audio and
