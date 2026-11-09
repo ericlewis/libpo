@@ -5,6 +5,10 @@ parameters (`po32_patch_params_t`). Callers supply values in `[0.0, 1.0]`.
 The behavior below describes this implementation; it does not establish
 sample-for-sample equivalence with Microtonic or a physical PO-32.
 
+The [patch FX helpers](guides/PO32_FX.md) evaluate documented parameter changes
+before a voice starts. They share this parameter domain; they do not alter an
+active voice or schedule pattern effects.
+
 ## Block Diagram
 
 ```mermaid
