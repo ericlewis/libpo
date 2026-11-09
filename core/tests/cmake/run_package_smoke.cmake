@@ -79,6 +79,7 @@ int main(void) {
   po35_decode_result_t decoded;
   po35_synth_t synth;
   po35_synth_voice_t voice;
+  po32_patch_params_t fx_patch = {0};
   size_t length;
   size_t analysis_bytes;
   size_t sample_count;
@@ -90,6 +91,9 @@ int main(void) {
   if (po35_synth_voice_init(&voice, &synth, 0, 0, 80) != PO_OK || !po35_synth_voice_done(&voice)) return 6;
   if (po35_analysis_size_for_pcm(48000, 48000, 80, &analysis_bytes) != PO_OK || analysis_bytes != 80 * 44) return 8;
   if (po33_sample_count_for_pcm(48000, 48000, &sample_count) != PO_OK || sample_count != 23438) return 9;
+  if (po32_fx_apply_patch(&fx_patch, PO32_FX_PATCH_FM, &fx_patch) != PO_OK || fx_patch.ModRate != 0.75f) return 10;
+  if (po32_fx_pitch_patch(&fx_patch, 0.125f, &fx_patch) != PO_OK || fx_patch.OscFreq != 0.125f) return 11;
+  if (po32_fx_eq_sweep_patch(&fx_patch, 0.5f, &fx_patch) != PO_OK || fx_patch.EQGain != 1.0f) return 12;
   return po33_sample_decode(0) == 0 ? 0 : 7;
 }
 ]=])

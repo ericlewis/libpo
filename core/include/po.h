@@ -5,6 +5,7 @@
 #include "po_common.h"
 #include "po32.h"
 #include "po32_synth.h"
+#include "po32_fx.h"
 #include "po33.h"
 #include "po35.h"
 #include "po35_analysis.h"
