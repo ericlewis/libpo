@@ -9,7 +9,7 @@ extern "C" {
 
 /* Experimental LPC analysis compatible with reconstruction synth model 1.
  * This is an approximation, not the original PO-35/PO-137 speech encoder. */
-#define PO35_ANALYSIS_MODEL_VERSION 1
+#define PO35_ANALYSIS_MODEL_VERSION 2
 #define PO35_ANALYSIS_RECORD_BYTES  44u
 #define PO35_ANALYSIS_MAX_RECORDS   65535u
 
@@ -45,6 +45,9 @@ po_status_t po35_analysis_size_for_pcm(size_t count, uint32_t rate, uint32_t fps
 
 /* Analyze normalized, finite mono PCM in [-1,1] into packed 44-byte records.
  * Both low (10 coefficients) and high (30 coefficients) banks are emitted.
+ * Model 2 fits the high bank within its byte bounds when the first target
+ * reflection is unrepresentable; pitch, unvoiced and low coefficients retain
+ * model 1 behavior. Numerically invalid fits retain the original quantization.
  * Shared gain is calibrated to the louder bank under reconstruction model 1;
  * it does not normalize input, and synthesized transient peaks can exceed 1.
  * All argument and sample checks precede output writes. On error the output
