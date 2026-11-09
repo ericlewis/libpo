@@ -310,6 +310,37 @@ static void test_syllable_resampling(void) {
       }
   }
 }
+static void test_high_bank_harmonics(void) {
+  size_t bytes, total;
+  po35_synth_t synth;
+  for (unsigned i = 0; i < 48000; ++i)
+    pcm[i] = (float)(.3 * sin(2 * 3.141592653589793 * 180 * i / 48000));
+  assert(po35_analysis_encode_f32(&workspace, pcm, 48000, 48000, 80, records, sizeof(records),
+                                  &bytes) == PO_OK);
+  assert(po35_synth_init(&synth, PO35_SYNTH_BANK_HIGH, 350) == PO_OK);
+  assert(po35_synth_render(&synth, records, bytes, 80, rendered, 48000, &total) == PO_OK);
+  unsigned raw = records[40 * 44] | (unsigned)records[40 * 44 + 1] << 8;
+  int pitch_code = raw < 32768 ? (int)raw : (int)raw - 65536;
+  double f0 = 261.6255653005986 * exp2(pitch_code / 2048.0), power[2];
+  /* Measure after startup, at the encoded oscillator frequency. Windowing
+   * suppresses leakage between the fundamental and its second harmonic. */
+  for (unsigned harmonic = 1; harmonic <= 2; ++harmonic) {
+    double re = 0, im = 0;
+    for (unsigned i = 0; i < 12000; ++i) {
+      double angle = 2 * 3.141592653589793 * harmonic * f0 * i / 24000;
+      double value = rendered[6000 + i] * (.5 - .5 * cos(2 * 3.141592653589793 * i / 11999));
+      re += value * cos(angle);
+      im += value * sin(angle);
+    }
+    power[harmonic - 1] = re * re + im * im;
+  }
+  fprintf(stderr, "high-bank sine H2/H1 power ratio: %.9f\n", power[1] / power[0]);
+  assert(power[0] > 0 && power[1] / power[0] < .1);
+  assert(PO35_ANALYSIS_MODEL_VERSION == 2);
+  assert(PO35_SYNTH_MODEL_VERSION == 1);
+  /* Model revisions must not silently grow caller-owned workspace storage. */
+  assert(sizeof(po35_analysis_workspace_t) == 6204 * sizeof(double));
+}
 int main(void) {
   test_contract();
   test_error_output_contract();
@@ -322,6 +353,7 @@ int main(void) {
   test_stress();
   test_resampling();
   test_syllable_resampling();
+  test_high_bank_harmonics();
   puts("analysis tests passed");
   return 0;
 }

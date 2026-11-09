@@ -104,11 +104,175 @@ static void test_power_model(void) {
   assert(isfinite(actual) && fabs(actual / expected - 1) < 1e-12);
 }
 
+/* Independent Toeplitz evaluation by diagonals, rather than the fitter's
+ * matrix traversal. The quadratic is the prediction error for this covariance. */
+static double reference_loss(const double *polynomial, const double *covariance) {
+  double result = 0.0;
+  for (unsigned i = 0; i <= 30; ++i)
+    result += polynomial[i] * polynomial[i] * covariance[0];
+  for (unsigned lag = 1; lag <= 30; ++lag) {
+    double cross = 0.0;
+    for (unsigned i = lag; i <= 30; ++i)
+      cross += polynomial[i] * polynomial[i - lag];
+    result += 2.0 * covariance[lag] * cross;
+  }
+  return result;
+}
+
+static void test_target_covariance(void) {
+  double target[31] = {0}, covariance[31], polynomial[31], temporary[31];
+  double recovered[31], next[31];
+  for (unsigned trial = 0; trial < 9; ++trial) {
+    target[1] = trial ? (trial & 1 ? -.9985 : .9985) : 0.0;
+    for (unsigned i = 2; i <= 30; ++i)
+      target[i] = trial ? .24 * sin(i * 3.0 + trial * 7.0) / sqrt(i) : 0.0;
+    assert(lpc_target_covariance(target, covariance, polynomial, temporary));
+    double error = 1.0;
+    recovered[0] = 1.0;
+    /* Solve the recovered covariance independently with forward Levinson. */
+    for (unsigned i = 1; i <= 30; ++i) {
+      double numerator = covariance[i];
+      for (unsigned j = 1; j < i; ++j)
+        numerator += recovered[j] * covariance[i - j];
+      double k = -numerator / error;
+      assert(fabs(k - target[i]) < 2e-10);
+      for (unsigned j = 1; j < i; ++j)
+        next[j] = recovered[j] + k * recovered[i - j];
+      for (unsigned j = 1; j < i; ++j)
+        recovered[j] = next[j];
+      recovered[i] = k;
+      error *= 1 - k * k;
+    }
+    assert(fabs(reference_loss(polynomial, covariance) - error) < 2e-10);
+    for (unsigned i = 1; i <= 30; ++i) {
+      double gradient = 0.0;
+      for (unsigned j = 0; j <= 30; ++j)
+        gradient += polynomial[j] * covariance[i > j ? i - j : j - i];
+      assert(fabs(gradient) < 2e-10);
+    }
+  }
+  target[1] = 1.0;
+  assert(!lpc_target_covariance(target, covariance, polynomial, temporary));
+  target[1] = NAN;
+  assert(!lpc_target_covariance(target, covariance, polynomial, temporary));
+}
+
+static void test_coordinate_minimization(void) {
+  double target[31] = {0}, covariance[31], polynomial[31], temporary[31];
+  double reflection[31], work[31], scratch[124];
+  uint8_t baseline[30], codes[30];
+  for (int code = -128; code <= 127; ++code) {
+    double k = po35_lar_reflection[(uint8_t)code];
+    assert(isfinite(k) && fabs(k) < 1.0);
+    if (code > -128)
+      assert(k > po35_lar_reflection[(uint8_t)(code - 1)]);
+  }
+  for (unsigned trial = 0; trial < 8; ++trial) {
+    target[1] = trial & 1 ? -.9985 : .9985;
+    for (unsigned i = 2; i <= 30; ++i)
+      target[i] = .24 * sin(i * 3.0 + trial * 7.0) / sqrt(i);
+    assert(lpc_target_covariance(target, covariance, polynomial, temporary));
+    baseline[0] = (uint8_t)(trial & 1 ? -128 : 127);
+    reflection[0] = 0.0;
+    for (unsigned i = 1; i < 30; ++i)
+      baseline[i] = (uint8_t)((int)((i * 11 + trial * 3) % 41) - 20);
+    for (unsigned i = 0; i < 30; ++i)
+      reflection[i + 1] = po35_lar_reflection[baseline[i]];
+    for (unsigned coordinate = 2; coordinate <= 30; coordinate += 4) {
+      memcpy(work, reflection, sizeof(work));
+      memcpy(codes, baseline, sizeof(codes));
+      lpc_step_up(work, polynomial, temporary);
+      double original = lpc_bilinear(polynomial, polynomial, covariance), selected = original;
+      int result =
+          lpc_fit_coordinate(covariance, work, codes, coordinate, &selected, scratch, temporary);
+      assert(result >= 0);
+      assert(selected <= original && codes[0] == baseline[0]);
+      /* Scratch A/B also independently predict the polynomial and quadratic
+       * away from both endpoints used to derive the coordinate slice. */
+      static const double points[] = {-.73, .21, .993};
+      for (unsigned p = 0; p < 3; ++p) {
+        work[coordinate] = points[p];
+        lpc_step_up(work, polynomial, temporary);
+        for (unsigned i = 0; i <= 30; ++i)
+          assert(fabs(polynomial[i] - (scratch[i] + points[p] * scratch[31 + i])) < 2e-12);
+        double aa = lpc_bilinear(scratch, scratch, covariance);
+        double ba = lpc_bilinear(scratch + 31, scratch, covariance);
+        double bb = lpc_bilinear(scratch + 31, scratch + 31, covariance);
+        assert(bb > 0.0);
+        assert(fabs(reference_loss(polynomial, covariance) -
+                    (aa + 2 * points[p] * ba + points[p] * points[p] * bb)) < 2e-10);
+      }
+      for (int code = -128; code <= 127; ++code) {
+        work[coordinate] = po35_lar_reflection[(uint8_t)code];
+        lpc_step_up(work, polynomial, temporary);
+        double exhaustive = reference_loss(polynomial, covariance);
+        assert(selected <= exhaustive + 2e-10 * (1 + fabs(exhaustive)));
+      }
+    }
+  }
+  /* Invalid curvature must not mutate either the bytes or working reflection. */
+  for (unsigned invalid = 0; invalid < 2; ++invalid) {
+    memset(covariance, 0, sizeof(covariance));
+    if (invalid)
+      covariance[0] = NAN;
+    memcpy(work, reflection, sizeof(work));
+    memcpy(codes, baseline, sizeof(codes));
+    double loss = 1.0;
+    int result = lpc_fit_coordinate(covariance, work, codes, 2, &loss, scratch, temporary);
+    assert(result == -1);
+    assert(memcmp(work, reflection, sizeof(work)) == 0);
+    assert(memcmp(codes, baseline, sizeof(codes)) == 0 && loss == 1.0);
+  }
+}
+
+static void test_fit_preservation(void) {
+  double target[31] = {0}, expanded[31], temporary[31], covariance[31], polynomial[31];
+  uint8_t baseline[30] = {128}, fitted[30];
+  target[1] = -.9985;
+  for (unsigned i = 2; i <= 30; ++i)
+    target[i] = .1 * sin(i * 3.0) / sqrt(i);
+  lpc_step_up(target, expanded, temporary);
+  assert(lpc_target_covariance(target, covariance, polynomial, temporary));
+  double decoded[31] = {0};
+  decoded[1] = po35_lar_reflection[128];
+  lpc_step_up(decoded, polynomial, temporary);
+  double before = reference_loss(polynomial, covariance);
+  memcpy(fitted, baseline, sizeof(fitted));
+  fit_high_bank(&workspace, expanded, fitted);
+  assert(fitted[0] == baseline[0] && memcmp(fitted, baseline, sizeof(fitted)) != 0);
+  for (unsigned i = 1; i <= 30; ++i)
+    decoded[i] = po35_lar_reflection[fitted[i - 1]];
+  lpc_step_up(decoded, polynomial, temporary);
+  assert(reference_loss(polynomial, covariance) < before);
+  /* Valid unselected target, inconsistent boundary, unstable target, NaN,
+   * and a finite overflow-producing target all retain the entire bank. */
+  for (unsigned invalid = 0; invalid < 5; ++invalid) {
+    target[1] = invalid == 0 ? -.4 : -.9985;
+    lpc_step_up(target, expanded, temporary);
+    memcpy(fitted, baseline, sizeof(fitted));
+    if (invalid == 1)
+      fitted[0] = 0;
+    if (invalid == 2)
+      expanded[30] = 1.0;
+    if (invalid == 3)
+      expanded[20] = NAN;
+    if (invalid == 4)
+      expanded[15] = DBL_MAX;
+    uint8_t unchanged[30];
+    memcpy(unchanged, fitted, sizeof(unchanged));
+    fit_high_bank(&workspace, expanded, fitted);
+    assert(memcmp(fitted, unchanged, sizeof(fitted)) == 0);
+  }
+}
+
 int main(void) {
   test_lar_quantization_bounds();
   test_gain_quantization();
   test_quiet_pitch_interpolation();
   test_power_model();
+  test_target_covariance();
+  test_coordinate_minimization();
+  test_fit_preservation();
   puts("private PO-35 analysis tests passed");
   return 0;
 }

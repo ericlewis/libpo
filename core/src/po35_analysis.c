@@ -80,6 +80,151 @@ static void window_signal(po35_analysis_workspace_t *w, const double *input, uns
   }
 }
 
+static void lpc_step_up(const double *reflection, double *polynomial, double *temporary) {
+  for (unsigned i = 0; i <= 30; ++i)
+    polynomial[i] = 0.0;
+  polynomial[0] = 1.0;
+  for (unsigned i = 1; i <= 30; ++i) {
+    for (unsigned j = 1; j < i; ++j)
+      temporary[j] = polynomial[j] + reflection[i] * polynomial[i - j];
+    for (unsigned j = 1; j < i; ++j)
+      polynomial[j] = temporary[j];
+    polynomial[i] = reflection[i];
+  }
+}
+
+/* Invert the Levinson recursion to recover the normalized target covariance. */
+static int lpc_target_covariance(const double *reflection, double *covariance, double *polynomial,
+                                 double *temporary) {
+  double error = 1.0;
+  covariance[0] = polynomial[0] = 1.0;
+  for (unsigned i = 1; i <= 30; ++i) {
+    double k = reflection[i], cross = 0.0;
+    if (!po_math_isfinite(k) || !(k > -1.0 && k < 1.0))
+      return 0;
+    for (unsigned j = 1; j < i; ++j)
+      cross += polynomial[j] * covariance[i - j];
+    covariance[i] = -k * error - cross;
+    if (!po_math_isfinite(covariance[i]))
+      return 0;
+    for (unsigned j = 1; j < i; ++j)
+      temporary[j] = polynomial[j] + k * polynomial[i - j];
+    for (unsigned j = 1; j < i; ++j)
+      polynomial[j] = temporary[j];
+    polynomial[i] = k;
+    error *= 1.0 - k * k;
+    if (!(error > 0.0) || !po_math_isfinite(error))
+      return 0;
+  }
+  return 1;
+}
+
+static double lpc_bilinear(const double *x, const double *y, const double *covariance) {
+  double sum = 0.0;
+  for (unsigned i = 0; i <= 30; ++i)
+    for (unsigned j = 0; j <= 30; ++j)
+      sum += x[i] * y[j] * covariance[i > j ? i - j : j - i];
+  return sum;
+}
+
+/* With the other reflections fixed, the polynomial is affine in one k.
+ * scratch holds four disjoint 31-double vectors; temporary holds another. */
+static int lpc_fit_coordinate(const double *covariance, double *reflection, uint8_t *codes,
+                              unsigned coordinate, double *objective, double *scratch,
+                              double *temporary) {
+  double *a = scratch, *b = scratch + 31, *polynomial = scratch + 62, *work = scratch + 93;
+  double old_k = reflection[coordinate], best_objective = *objective;
+  uint8_t old_code = codes[coordinate - 1], best = old_code;
+  for (unsigned i = 0; i <= 30; ++i)
+    work[i] = reflection[i];
+  work[coordinate] = 0.0;
+  lpc_step_up(work, a, temporary);
+  work[coordinate] = 1.0;
+  lpc_step_up(work, b, temporary);
+  for (unsigned i = 0; i <= 30; ++i)
+    b[i] -= a[i];
+  double c = lpc_bilinear(b, a, covariance), d = lpc_bilinear(b, b, covariance);
+  if (!(d > 0.0) || !po_math_isfinite(d) || !po_math_isfinite(c))
+    return -1;
+  double optimum = -c / d;
+  if (!po_math_isfinite(optimum))
+    return -1;
+  unsigned lo = 0, hi = 256;
+  while (lo < hi) {
+    unsigned mid = lo + (hi - lo) / 2;
+    if (po35_lar_reflection[(uint8_t)((int)mid - 128)] < optimum)
+      lo = mid + 1;
+    else
+      hi = mid;
+  }
+  unsigned candidates[2] = {lo ? lo - 1 : 0, lo < 256 ? lo : 255};
+  for (unsigned i = 0; i < 2; ++i) {
+    uint8_t code = (uint8_t)((int)candidates[i] - 128);
+    if (code == old_code || (i && candidates[i] == candidates[0]))
+      continue;
+    reflection[coordinate] = po35_lar_reflection[code];
+    lpc_step_up(reflection, polynomial, temporary);
+    double loss = lpc_bilinear(polynomial, polynomial, covariance);
+    /* Evaluate the actual polynomial, retaining the current byte on a tie. */
+    if (loss > 0.0 && po_math_isfinite(loss) && loss < best_objective) {
+      best = code;
+      best_objective = loss;
+    }
+  }
+  codes[coordinate - 1] = best;
+  reflection[coordinate] = best == old_code ? old_k : po35_lar_reflection[best];
+  *objective = best_objective;
+  return best != old_code;
+}
+
+static void fit_high_bank(po35_analysis_workspace_t *w, const double *expanded, uint8_t *out) {
+  /* The frame RMS and both input windows have already been extracted. native
+   * is dead until the next frame, so these 217 doubles do not grow the ABI or
+   * stack. native[0..30] may contain expanded; setup's window/decimator survive. */
+  double *target = w->native + 31, *covariance = w->native + 62;
+  double *reflection = w->native + 93, *scratch = w->native + 124;
+  uint8_t candidate[30];
+  for (unsigned i = 0; i <= 30; ++i)
+    w->lpc[i] = expanded[i];
+  for (unsigned i = 30; i > 0; --i) {
+    double k = w->lpc[i];
+    if (!po_math_isfinite(k) || !(k > -1.0 && k < 1.0))
+      return;
+    target[i] = k;
+    for (unsigned j = 1; j < i; ++j)
+      w->temporary[j] = (w->lpc[j] - k * w->lpc[i - j]) / (1.0 - k * k);
+    for (unsigned j = 1; j < i; ++j)
+      w->lpc[j] = w->temporary[j];
+  }
+  if (!(target[1] < po35_lar_reflection[128] || target[1] > po35_lar_reflection[127]))
+    return;
+  if (out[0] != (target[1] < po35_lar_reflection[128] ? 128 : 127))
+    return;
+  if (!lpc_target_covariance(target, covariance, w->lpc, w->temporary))
+    return;
+  reflection[0] = 0.0;
+  for (unsigned i = 0; i < 30; ++i) {
+    candidate[i] = out[i];
+    reflection[i + 1] = po35_lar_reflection[candidate[i]];
+  }
+  lpc_step_up(reflection, w->lpc, w->temporary);
+  double initial = lpc_bilinear(w->lpc, w->lpc, covariance), objective = initial;
+  if (!(initial > 0.0) || !po_math_isfinite(initial))
+    return;
+  for (unsigned sweep = 0; sweep < 4; ++sweep)
+    for (unsigned coordinate = 2; coordinate <= 30; ++coordinate)
+      lpc_fit_coordinate(covariance, reflection, candidate, coordinate, &objective, scratch,
+                         w->temporary);
+  /* Commit only a complete finite, monotone fit; invalid targets retain the
+   * original quantized bank without changing the public encode error contract. */
+  lpc_step_up(reflection, w->lpc, w->temporary);
+  double final = lpc_bilinear(w->lpc, w->lpc, covariance);
+  if (!(final > 0.0 && final <= initial) || !po_math_isfinite(final))
+    return;
+  for (unsigned i = 1; i < 30; ++i)
+    out[i] = candidate[i];
+}
+
 static void lpc_bank(po35_analysis_workspace_t *w, const double *input, unsigned n, unsigned order,
                      uint8_t *out) {
   unsigned i, j, lag;
@@ -115,6 +260,9 @@ static void lpc_bank(po35_analysis_workspace_t *w, const double *input, unsigned
   /* Bandwidth expansion applies to the polynomial, then step down to LAR. */
   for (i = 1; i <= order; ++i)
     w->lpc[i] *= po_math_exp2(po_math_log(order == 10 ? 0.9 : 0.8) / PO_MATH_LN2 * i / order);
+  if (order == 30)
+    for (i = 0; i <= 30; ++i)
+      w->native[i] = w->lpc[i];
   for (i = order; i > 0; --i) {
     double k = w->lpc[i];
     if (k > 0.995)
@@ -131,6 +279,8 @@ static void lpc_bank(po35_analysis_workspace_t *w, const double *input, unsigned
     for (j = 1; j < i; ++j)
       w->lpc[j] = w->temporary[j];
   }
+  if (order == 30)
+    fit_high_bank(w, w->native, out);
 }
 
 static double pitch(po35_analysis_workspace_t *w, double *periodicity) {
