@@ -6,6 +6,8 @@ See the [pattern layout](PO33.md#record-layout) for the packed FX bytes and
 [settings layout](PO33.md#record-layout) for the sixteen retained state bytes.
 These observations constrain their interpretation; they do not establish a
 complete sequencer model.
+The [FX mapping table](PO33_FX.md) separates documented button choices,
+confirmed writes, generated-code playback and remaining identity hypotheses.
 
 ## Pattern effects and hardware observations
 
@@ -43,8 +45,9 @@ The [PO-33 manual](https://teenage.engineering/guides/po-33/en) distinguishes
 these recorded performance effects from knob parameter locks. The uniform
 `66` footer cannot establish high/low nibble order or a write endpoint, and
 state 11 does not distinguish the competing position rules. Only code `6`
-has this confirmed musical identity: do not infer all effect codes from key
-numbers or reinterpret the older raw `a` captures as octave-up. The clean
+has both a confirmed physical-button mapping and playback identity: do not
+infer all effect codes from key numbers or reinterpret the older raw `a`
+captures as octave-up. The clean
 baseline uses `f` nibbles; an explicit FX-16 clear-and-readback remains untested.
 No intermediate readback separates the live FX control from the recorded FX
 interaction, so the state-byte change cannot be assigned to either one alone.
