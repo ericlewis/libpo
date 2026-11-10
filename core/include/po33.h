@@ -24,8 +24,14 @@ extern "C" {
 #define PO33_STEP_COUNT         16u
 #define PO33_SOUND_COUNT        16u
 #define PO33_CHAIN_CAPACITY     128u
-#define PO33_FX_OCTAVE_UP       6u
-#define PO33_FX_BASELINE        15u /* Observed normal baseline; clearing behavior is unresolved. */
+
+/* Stored playback behaviors observed on PO-33; PO-133 playback is unverified.
+ * Only octave-up also has a verified physical-button mapping (FX key 7).
+ * These names do not define a renderer or general timing/transition rules. */
+#define PO33_FX_OCTAVE_UP   6u
+#define PO33_FX_OCTAVE_DOWN 7u
+#define PO33_FX_REVERSE     14u
+#define PO33_FX_BASELINE    15u /* Observed normal baseline; clearing behavior is unresolved. */
 
 #define PO33_POOL_ALLOCATION_BLOCK_BYTES 4096u
 
@@ -66,8 +72,8 @@ typedef struct po33_pattern_event {
 
 typedef struct po33_pattern {
   po33_pattern_event_t events[PO33_STEP_COUNT][PO33_SOUND_COUNT];
-  /* Two FX codes per byte, high nibble first. Code 6 is octave-up;
-   * other effect IDs remain raw. */
+  /* Two FX codes per byte, high nibble first. See PO33_FX_* for named playback
+   * behaviors; preserve unnamed codes and do not infer physical button IDs. */
   uint8_t footer_raw[8];
 } po33_pattern_t;
 
