@@ -211,6 +211,32 @@ po_status_t po35_table_7be7_decode(const uint8_t *data, size_t len, po35_table_7
 po_status_t po35_table_7be7_encode(const po35_table_7be7_t *value, uint8_t *out, size_t capacity);
 po_status_t po35_table_1c7f_decode(const uint8_t *data, size_t len, po35_table_1c7f_t *out);
 po_status_t po35_table_1c7f_encode(const po35_table_1c7f_t *value, uint8_t *out, size_t capacity);
+
+/* Transactionally replace one existing 1C7F row selected by replacement->index.
+ * The body stays opaque; this does not install a named effect or model playback.
+ * frame must contain exactly one complete frame, without trailing bytes.
+ * All 1C7F rows must have their fixed payload size, the selected index must
+ * occur exactly once, and any present speech groups must be complete.
+ *
+ * On success, packet order, lengths and offsets and every non-target payload
+ * are preserved; running checksums/whitening are rebuilt. The output has
+ * exactly frame_len bytes. Both workspace and out_frame need frame_len bytes;
+ * no allocation or separate sizing plan is required. Capacity beyond the
+ * written output remains untouched; workspace contents are unspecified.
+ *
+ * All pointers are required. The borrowed frame and replacement may overlap
+ * each other and must remain immutable during the call. Workspace, output
+ * and output-length storage must be mutually disjoint and disjoint from both
+ * inputs. Prohibited aliases or overflowing ranges return PO_ERR_INVALID_ARG
+ * without writes. Other failures leave out_frame untouched and clear the
+ * non-NULL, nonoverlapping *out_frame_bytes. Short buffers return
+ * PO_ERR_BUFFER_TOO_SMALL; invalid framing returns PO_ERR_FRAME; malformed
+ * rows, a missing/duplicate target or incomplete speech groups return
+ * PO_ERR_PARSE. No device acceptance or effect-table semantics are implied. */
+po_status_t po35_table_1c7f_replace(const uint8_t *frame, size_t frame_len,
+                                    const po35_table_1c7f_t *replacement, uint8_t *workspace,
+                                    size_t workspace_bytes, uint8_t *out_frame, size_t out_capacity,
+                                    size_t *out_frame_bytes);
 po_status_t po35_speech_header_decode(const uint8_t *data, size_t len, po35_speech_header_t *out);
 po_status_t po35_speech_header_encode(const po35_speech_header_t *header, uint8_t *out,
                                       size_t capacity);

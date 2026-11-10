@@ -297,8 +297,8 @@ static void speech_edit_plan_reject(po35_speech_edit_plan_t *plan, size_t edit_i
   plan->reason = reason;
 }
 
-static int speech_edit_ranges_overlap(const void *left, size_t left_bytes, const void *right,
-                                      size_t right_bytes) {
+static int ranges_overlap(const void *left, size_t left_bytes, const void *right,
+                          size_t right_bytes) {
   uintptr_t left_start, right_start;
   if (left_bytes == 0u || right_bytes == 0u)
     return 0;
@@ -422,19 +422,18 @@ po_status_t po35_speech_edit_plan(const uint8_t *frame, size_t frame_len,
 
   if (plan == NULL)
     return PO_ERR_INVALID_ARG;
-  if (frame != NULL && speech_edit_ranges_overlap(plan, sizeof(*plan), frame, frame_len))
+  if (frame != NULL && ranges_overlap(plan, sizeof(*plan), frame, frame_len))
     return PO_ERR_INVALID_ARG;
   if (edits != NULL && edit_count > SIZE_MAX / sizeof(*edits)) {
     speech_edit_plan_clear(plan);
     return PO_ERR_RANGE;
   }
-  if (edits != NULL &&
-      speech_edit_ranges_overlap(plan, sizeof(*plan), edits, edit_count * sizeof(*edits)))
+  if (edits != NULL && ranges_overlap(plan, sizeof(*plan), edits, edit_count * sizeof(*edits)))
     return PO_ERR_INVALID_ARG;
   if (edits != NULL) {
     for (size_t i = 0; i < edit_count; ++i)
       if (edits[i].records != NULL &&
-          speech_edit_ranges_overlap(plan, sizeof(*plan), edits[i].records, edits[i].record_bytes))
+          ranges_overlap(plan, sizeof(*plan), edits[i].records, edits[i].record_bytes))
         return PO_ERR_INVALID_ARG;
   }
 
@@ -524,10 +523,10 @@ typedef struct po35_speech_edit_rebuild {
   po_status_t status;
 } po35_speech_edit_rebuild_t;
 
-typedef struct po35_speech_edit_range {
+typedef struct po35_edit_range {
   const void *data;
   size_t bytes;
-} po35_speech_edit_range_t;
+} po35_edit_range_t;
 
 static int speech_edit_plan_matches(const po35_speech_edit_plan_t *left,
                                     const po35_speech_edit_plan_t *right) {
@@ -543,7 +542,7 @@ static int speech_edit_rebuild_has_invalid_aliases(
     const uint8_t *frame, size_t frame_len, const po35_speech_edit_t *edits, size_t edit_count,
     const po35_speech_edit_plan_t *plan, uint8_t *workspace, size_t workspace_bytes,
     uint8_t *out_frame, size_t out_capacity, size_t *out_frame_bytes) {
-  const po35_speech_edit_range_t storage[] = {
+  const po35_edit_range_t storage[] = {
       {plan, plan == NULL ? 0u : sizeof(*plan)},
       {workspace, workspace == NULL ? 0u : workspace_bytes},
       {out_frame, out_frame == NULL ? 0u : out_capacity},
@@ -556,17 +555,15 @@ static int speech_edit_rebuild_has_invalid_aliases(
   edit_bytes = edits == NULL ? 0u : edit_count * sizeof(*edits);
   for (size_t i = 0; i < sizeof(storage) / sizeof(storage[0]); ++i) {
     for (size_t j = 0; j < i; ++j)
-      if (speech_edit_ranges_overlap(storage[i].data, storage[i].bytes, storage[j].data,
-                                     storage[j].bytes))
+      if (ranges_overlap(storage[i].data, storage[i].bytes, storage[j].data, storage[j].bytes))
         return 1;
-    if ((frame != NULL &&
-         speech_edit_ranges_overlap(storage[i].data, storage[i].bytes, frame, frame_len)) ||
-        speech_edit_ranges_overlap(storage[i].data, storage[i].bytes, edits, edit_bytes))
+    if ((frame != NULL && ranges_overlap(storage[i].data, storage[i].bytes, frame, frame_len)) ||
+        ranges_overlap(storage[i].data, storage[i].bytes, edits, edit_bytes))
       return 1;
     if (edits != NULL)
       for (size_t j = 0; j < edit_count; ++j)
-        if (speech_edit_ranges_overlap(storage[i].data, storage[i].bytes, edits[j].records,
-                                       edits[j].record_bytes))
+        if (ranges_overlap(storage[i].data, storage[i].bytes, edits[j].records,
+                           edits[j].record_bytes))
           return 1;
   }
   return 0;
@@ -702,6 +699,127 @@ po_status_t po35_speech_edit_rebuild(const uint8_t *frame, size_t frame_len,
   if (status != PO_OK)
     return status;
   if (frame_bytes != expected.required_frame_bytes)
+    return PO_ERR_FRAME;
+  copy_bytes(out_frame, workspace, frame_bytes);
+  *out_frame_bytes = frame_bytes;
+  return PO_OK;
+}
+
+typedef struct po35_table_replace_scan {
+  uint8_t index;
+  int found;
+  po_status_t status;
+} po35_table_replace_scan_t;
+
+static int table_replace_scan_packet(const po_packet_t *packet, void *user) {
+  po35_table_replace_scan_t *scan = user;
+  po35_table_1c7f_t row;
+  if (packet->tag_code != PO35_TAG_TABLE_1C7F || scan->status != PO_OK)
+    return 0;
+  scan->status = po35_table_1c7f_decode(packet->payload, packet->payload_len, &row);
+  if (scan->status == PO_OK && row.index == scan->index) {
+    if (scan->found)
+      scan->status = PO_ERR_PARSE;
+    scan->found = 1;
+  }
+  /* Continue after a row error so a later framing failure is still detected. */
+  return 0;
+}
+
+static int table_replace_has_invalid_aliases(const uint8_t *frame, size_t frame_len,
+                                             const po35_table_1c7f_t *replacement,
+                                             uint8_t *workspace, size_t workspace_bytes,
+                                             uint8_t *out_frame, size_t out_capacity,
+                                             size_t *out_frame_bytes) {
+  const po35_edit_range_t storage[] = {
+      {workspace, workspace == NULL ? 0u : workspace_bytes},
+      {out_frame, out_frame == NULL ? 0u : out_capacity},
+      {out_frame_bytes, out_frame_bytes == NULL ? 0u : sizeof(*out_frame_bytes)},
+  };
+  for (size_t i = 0; i < sizeof(storage) / sizeof(storage[0]); ++i) {
+    for (size_t j = 0; j < i; ++j)
+      if (ranges_overlap(storage[i].data, storage[i].bytes, storage[j].data, storage[j].bytes))
+        return 1;
+    if ((frame != NULL && ranges_overlap(storage[i].data, storage[i].bytes, frame, frame_len)) ||
+        (replacement != NULL &&
+         ranges_overlap(storage[i].data, storage[i].bytes, replacement, sizeof(*replacement))))
+      return 1;
+  }
+  return 0;
+}
+
+typedef struct po35_table_replace_copy {
+  po35_builder_t *builder;
+  const uint8_t *payload;
+  uint8_t index;
+  po_status_t status;
+} po35_table_replace_copy_t;
+
+static int table_replace_copy_packet(const po_packet_t *packet, void *user) {
+  po35_table_replace_copy_t *copy = user;
+  const uint8_t *payload = packet->payload;
+  if (packet->tag_code == PO35_TAG_TABLE_1C7F && packet->payload[0] == copy->index)
+    payload = copy->payload;
+  copy->status = po35_builder_append_packet(copy->builder, packet->tag_code, payload,
+                                            packet->payload_len, NULL);
+  return copy->status != PO_OK;
+}
+
+po_status_t po35_table_1c7f_replace(const uint8_t *frame, size_t frame_len,
+                                    const po35_table_1c7f_t *replacement, uint8_t *workspace,
+                                    size_t workspace_bytes, uint8_t *out_frame, size_t out_capacity,
+                                    size_t *out_frame_bytes) {
+  po35_table_replace_scan_t scan = {.status = PO_OK};
+  po35_table_replace_copy_t copy;
+  po35_speech_edit_plan_t speech_plan;
+  po35_decode_result_t result;
+  po35_builder_t builder;
+  po_status_t status;
+  uint8_t payload[PO35_TABLE_1C7F_BYTES];
+  size_t frame_bytes;
+
+  if (table_replace_has_invalid_aliases(frame, frame_len, replacement, workspace, workspace_bytes,
+                                        out_frame, out_capacity, out_frame_bytes))
+    return PO_ERR_INVALID_ARG;
+  if (out_frame_bytes != NULL)
+    *out_frame_bytes = 0u;
+  if (frame == NULL || replacement == NULL || workspace == NULL || out_frame == NULL ||
+      out_frame_bytes == NULL)
+    return PO_ERR_INVALID_ARG;
+
+  scan.index = replacement->index;
+  status = po35_frame_parse(frame, frame_len, table_replace_scan_packet, &scan, &result);
+  if (status != PO_OK || !result.done || result.stopped || result.frame_bytes != frame_len)
+    return PO_ERR_FRAME;
+  if (scan.status != PO_OK || !scan.found)
+    return PO_ERR_PARSE;
+  status = po35_speech_edit_plan(frame, frame_len, NULL, 0u, &speech_plan);
+  if (status != PO_OK)
+    return status;
+  if (workspace_bytes < frame_len || out_capacity < frame_len)
+    return PO_ERR_BUFFER_TOO_SMALL;
+
+  status = po35_table_1c7f_encode(replacement, payload, sizeof(payload));
+  if (status != PO_OK)
+    return status;
+  status = po35_builder_init(&builder, workspace, workspace_bytes);
+  if (status != PO_OK)
+    return status;
+  copy = (po35_table_replace_copy_t){
+      .builder = &builder,
+      .payload = payload,
+      .index = replacement->index,
+      .status = PO_OK,
+  };
+  status = po35_frame_parse(frame, frame_len, table_replace_copy_packet, &copy, &result);
+  if (copy.status != PO_OK)
+    return copy.status;
+  if (status != PO_OK || !result.done || result.stopped || result.frame_bytes != frame_len)
+    return PO_ERR_FRAME;
+  status = po35_builder_finish(&builder, &frame_bytes);
+  if (status != PO_OK)
+    return status;
+  if (frame_bytes != frame_len)
     return PO_ERR_FRAME;
   copy_bytes(out_frame, workspace, frame_bytes);
   *out_frame_bytes = frame_bytes;
