@@ -133,8 +133,8 @@ static void test_resonance_errors(void) {
 }
 static void test_pattern_fx_order_and_preservation(void) {
   const uint8_t wire[PO33_PATTERN_FX_BYTES] = {0x6f, 0x01, 0x23, 0x45, 0x78, 0x9a, 0xbc, 0xde};
-  const po33_pattern_fx_t expected = {
-      {PO33_FX_OCTAVE_UP, PO33_FX_BASELINE, 0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14}};
+  const po33_pattern_fx_t expected = {{PO33_FX_OCTAVE_UP, PO33_FX_BASELINE, 0, 1, 2, 3, 4, 5,
+                                       PO33_FX_OCTAVE_DOWN, 8, 9, 10, 11, 12, 13, PO33_FX_REVERSE}};
   po33_pattern_fx_t fx;
   uint8_t encoded[PO33_PATTERN_FX_BYTES + 1];
   assert(po33_pattern_fx_decode(wire, sizeof(wire), &fx) == PO_OK);
