@@ -71,10 +71,33 @@ set_target_properties(${consumers} PROPERTIES
 ]=])
 file(WRITE "${work}/consumer/consumer.c" [=[
 #include <po.h>
+static const po35_table_1c7f_t replacement = {
+  255, {255, 0, 128, 127, 1, 2, 3, 4, 5, 6, 7, 8}
+};
+static int check_table_packet(const po_packet_t *packet, void *user) {
+  unsigned *seen = (unsigned *)user;
+  if (packet->tag_code == PO35_TAG_TABLE_1C7F) {
+    po35_table_1c7f_t row;
+    if ((*seen & 1u) || po35_table_1c7f_decode(packet->payload, packet->payload_len, &row) != PO_OK ||
+        row.index != replacement.index) return 1;
+    for (size_t i = 0; i < sizeof(row.data_raw); ++i)
+      if (row.data_raw[i] != replacement.data_raw[i]) return 1;
+    *seen |= 1u;
+    return 0;
+  }
+  if ((*seen & 2u) || packet->tag_code != 0x1234 || packet->payload_len != 3 ||
+      packet->payload[0] != 9 || packet->payload[1] != 8 || packet->payload[2] != 7) return 1;
+  *seen |= 2u;
+  return 0;
+}
 int main(void) {
   enum po32_status legacy_status = PO32_OK;
   struct po32_packet legacy_packet = {0};
-  unsigned char frame[PO35_PREAMBLE_BYTES + 5];
+  unsigned char frame[PO35_PREAMBLE_BYTES + 64];
+  unsigned char workspace[sizeof(frame)], output[sizeof(frame)];
+  unsigned char table_payload[PO35_TABLE_1C7F_BYTES];
+  const unsigned char unknown_payload[] = {9, 8, 7};
+  const po35_table_1c7f_t original = {255, {0}};
   po35_builder_t builder;
   po35_decode_result_t decoded;
   po35_synth_t synth;
@@ -83,6 +106,8 @@ int main(void) {
   size_t length;
   size_t analysis_bytes;
   size_t sample_count;
+  size_t written = 0;
+  unsigned seen_packets = 0;
   if (legacy_status != PO_OK || legacy_packet.payload_len != 0) return 1;
   if (po35_builder_init(&builder, frame, sizeof(frame)) != PO_OK) return 2;
   if (po35_builder_finish(&builder, &length) != PO_OK) return 3;
@@ -94,6 +119,18 @@ int main(void) {
   if (po32_fx_apply_patch(&fx_patch, PO32_FX_PATCH_FM, &fx_patch) != PO_OK || fx_patch.ModRate != 0.75f) return 10;
   if (po32_fx_pitch_patch(&fx_patch, 0.125f, &fx_patch) != PO_OK || fx_patch.OscFreq != 0.125f) return 11;
   if (po32_fx_eq_sweep_patch(&fx_patch, 0.5f, &fx_patch) != PO_OK || fx_patch.EQGain != 1.0f) return 12;
+  if (po35_table_1c7f_encode(&original, table_payload, sizeof(table_payload)) != PO_OK) return 13;
+  if (po35_builder_init(&builder, frame, sizeof(frame)) != PO_OK) return 14;
+  if (po35_builder_append_packet(&builder, PO35_TAG_TABLE_1C7F,
+      table_payload, sizeof(table_payload), 0) != PO_OK) return 15;
+  if (po35_builder_append_packet(&builder, 0x1234,
+      unknown_payload, sizeof(unknown_payload), 0) != PO_OK) return 16;
+  if (po35_builder_finish(&builder, &length) != PO_OK) return 17;
+  if (po35_table_1c7f_replace(frame, length, &replacement, workspace, sizeof(workspace),
+      output, sizeof(output), &written) != PO_OK || written != length) return 18;
+  if (po35_frame_parse(output, written, check_table_packet, &seen_packets, &decoded) != PO_OK ||
+      !decoded.done || decoded.stopped || decoded.frame_bytes != written ||
+      decoded.packet_count != 2 || seen_packets != 3) return 19;
   return po33_sample_decode(0) == 0 ? 0 : 7;
 }
 ]=])

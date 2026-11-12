@@ -341,7 +341,8 @@ target_link_libraries(po_stereo_internal_tests PRIVATE po32)
 add_test(NAME po_stereo_internal_tests COMMAND po_stereo_internal_tests)
 
 # Family codecs, shared transport, and the freestanding speech renderer.
-foreach(test_name IN ITEMS po32_data po33_audio po33_data po35 po35_analysis po35_synth po_stereo po_wire)
+foreach(test_name IN ITEMS
+    po32_data po33_audio po33_data po35 po35_table_edit po35_analysis po35_synth po_stereo po_wire)
   add_executable(${test_name}_tests tests/test_${test_name}.c)
   target_link_libraries(${test_name}_tests PRIVATE po32)
   add_test(NAME ${test_name}_tests COMMAND ${test_name}_tests)
