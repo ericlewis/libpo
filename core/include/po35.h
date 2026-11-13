@@ -177,6 +177,34 @@ typedef struct po35_speech_event {
   uint8_t gate_raw; /* Secondary low nibble. */
 } po35_speech_event_t;
 
+/* Lossless view of one pattern index pair. The tested PO-35 displays the low
+ * nibble as voice selection and the high nibble as effect/clear selection.
+ * Values 8..15 remain representable in both fields; their device behavior is
+ * unassigned. This type does not interpret the indexed table bodies. */
+typedef struct po35_pattern_index_pair {
+  uint8_t voice_raw; /* Low nibble. */
+  uint8_t fx_raw;    /* High nibble. */
+} po35_pattern_index_pair_t;
+
+/* Pattern-wide scale codes on the tested PO-35. The Minor code follows from
+ * the user-confirmed fourth option; no isolated Minor-only edit was captured. */
+typedef enum po35_pattern_scale {
+  PO35_PATTERN_SCALE_MAJOR = 0,
+  PO35_PATTERN_SCALE_MINOR = 1,
+  PO35_PATTERN_SCALE_BLUES = 2,
+  PO35_PATTERN_SCALE_ARAB = 3,
+} po35_pattern_scale_t;
+
+/* One step's four stored speech controls, in payload order. Pitch and formant
+ * have direct PO-35 evidence; start and speed have one qualitative device
+ * comparison each. All values stay raw, including context-dependent zero. */
+typedef struct po35_speech_step_controls {
+  uint8_t pitch_raw;
+  uint8_t formant_raw;
+  uint8_t start_raw;
+  uint8_t speed_raw;
+} po35_speech_step_controls_t;
+
 typedef struct po35_settings {
   po35_speech_controls_t speech[PO35_SPEECH_SLOT_COUNT];
   po35_drum_controls_t drums[PO35_DRUM_COUNT];
@@ -191,12 +219,17 @@ typedef struct po35_pattern {
   uint8_t pattern_index;
   uint8_t speech_events[PO35_PATTERN_STEP_COUNT];        /* Slot high, event code low. */
   uint8_t speech_secondary_raw[PO35_PATTERN_STEP_COUNT]; /* Note high, gate low. */
+  /* Per-step speech controls. [0] has observed pitch behavior: a fixed 128
+   * played flat across all eight tested voices. Numeric scale is unresolved. */
   uint8_t speech_parameters[PO35_PATTERN_STEP_COUNT][4];
   uint8_t drum_events[PO35_PATTERN_STEP_COUNT];
   po35_drum_controls_t drums[PO35_PATTERN_STEP_COUNT];
-  uint8_t index_pairs_raw[PO35_PATTERN_STEP_COUNT];
+  uint8_t index_pairs_raw[PO35_PATTERN_STEP_COUNT]; /* See po35_pattern_index_pair_t. */
   uint8_t step_state_raw[PO35_PATTERN_STEP_COUNT];
-  uint8_t tail_raw[4];   /* Payload bytes 177..180. */
+  /* Payload bytes 177..180. Byte 177 holds tested pattern key/scale state;
+   * low two bits select scale. A C-to-C-sharp key edit changed 00 to 08 on
+   * PO-35; bit 2 and other key states remain unresolved. */
+  uint8_t tail_raw[4];
   uint16_t derived_mask; /* Stored verbatim; encoding never recomputes it. */
 } po35_pattern_t;
 
@@ -276,6 +309,34 @@ po_status_t po35_speech_event_decode(uint8_t event_raw, uint8_t secondary_raw,
                                      po35_speech_event_t *out);
 po_status_t po35_speech_event_encode(const po35_speech_event_t *event, uint8_t *out_event_raw,
                                      uint8_t *out_secondary_raw);
+
+/* Split/combine one pattern step's voice/effect index byte. Decode accepts
+ * all 256 stored values. Encode requires each raw nibble in 0..15 and leaves
+ * the output unchanged on failure. Null pointers return PO_ERR_INVALID_ARG.
+ * Input and output storage must be disjoint. No indexed-table lookup, effect
+ * synthesis or pattern-state update is performed. */
+po_status_t po35_pattern_index_pair_decode(uint8_t raw, po35_pattern_index_pair_t *out);
+po_status_t po35_pattern_index_pair_encode(const po35_pattern_index_pair_t *value, uint8_t *out);
+
+/* Read/write the scale in pattern payload byte 177. Set changes only its low
+ * two bits, preserving key-bearing bits and unknown bit 2. No numeric key
+ * conversion or note transposition is performed. Null pointers return
+ * PO_ERR_INVALID_ARG; invalid scale values return PO_ERR_RANGE. Failures
+ * leave the pattern or output unchanged. Input/output storage is disjoint. */
+po_status_t po35_pattern_scale_get(const po35_pattern_t *pattern, po35_pattern_scale_t *out);
+po_status_t po35_pattern_scale_set(po35_pattern_t *pattern, po35_pattern_scale_t scale);
+
+/* Read/write all four raw speech controls at one zero-based pattern step.
+ * The setter changes only speech_parameters[step], preserving every event,
+ * other step, FX index, retained state and stored mask. All byte values 0..255
+ * are accepted; neither helper converts displayed knob values or simulates
+ * interpolation. Null pointers return PO_ERR_INVALID_ARG; step >= 16 returns
+ * PO_ERR_RANGE. Failures leave the output or pattern unchanged. Input/output
+ * storage must be disjoint. */
+po_status_t po35_pattern_speech_controls_get(const po35_pattern_t *pattern, size_t step,
+                                             po35_speech_step_controls_t *out);
+po_status_t po35_pattern_speech_controls_set(po35_pattern_t *pattern, size_t step,
+                                             const po35_speech_step_controls_t *value);
 
 /* Transactional speech replacement. Both functions borrow frame, edits and
  * every edit's record storage for the call. Those read-only inputs may overlap

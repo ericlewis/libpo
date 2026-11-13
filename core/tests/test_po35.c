@@ -333,6 +333,208 @@ static void test_speech_event_validation(void) {
   }
 }
 
+static void test_pattern_index_pair_golden_values(void) {
+  static const struct {
+    uint8_t raw, voice, fx;
+  } cases[] = {
+      {0x37, 7, 3},   /* Factory Pattern 15: FX 12, voice 8. */
+      {0x35, 5, 3},   /* Factory Pattern 15: FX 12, voice 6. */
+      {0x20, 0, 2},   /* Factory Pattern 4: FX 11, voice 1. */
+      {0x70, 0, 7},   /* Factory Pattern 4: clear, voice 1. */
+      {0x75, 5, 7},   /* Factory Pattern 4: clear, voice 6. */
+      {0x74, 4, 7},   /* Tested clear-state pattern: voice 5. */
+      {0xff, 15, 15}, /* Preserve unnamed future values. */
+  };
+  for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+    po35_pattern_index_pair_t value = {0xa5, 0xa5};
+    uint8_t encoded = 0xa5;
+    assert(po35_pattern_index_pair_decode(cases[i].raw, &value) == PO_OK);
+    assert(value.voice_raw == cases[i].voice && value.fx_raw == cases[i].fx);
+    assert(po35_pattern_index_pair_encode(&value, &encoded) == PO_OK);
+    assert(encoded == cases[i].raw);
+  }
+}
+
+static void test_pattern_index_pair_preservation(void) {
+  for (unsigned int raw = 0; raw <= UINT8_MAX; ++raw) {
+    po35_pattern_index_pair_t value;
+    uint8_t encoded = 0xa5;
+    assert(po35_pattern_index_pair_decode((uint8_t)raw, &value) == PO_OK);
+    assert(po35_pattern_index_pair_encode(&value, &encoded) == PO_OK);
+    assert(encoded == raw);
+  }
+}
+
+static void test_pattern_index_pair_edit_locality(void) {
+  uint8_t original[PO35_PATTERN_BYTES], expected[PO35_PATTERN_BYTES], encoded[PO35_PATTERN_BYTES];
+  for (size_t i = 0; i < sizeof(original); ++i)
+    original[i] = (uint8_t)(i * 71u + 19u);
+  original[0] = 3;
+  for (size_t step = 0; step < PO35_PATTERN_STEP_COUNT; ++step) {
+    for (unsigned int field = 0; field < 2u; ++field) {
+      po35_pattern_t pattern;
+      po35_pattern_index_pair_t value;
+      assert(po35_pattern_decode(original, sizeof(original), &pattern) == PO_OK);
+      assert(po35_pattern_index_pair_decode(pattern.index_pairs_raw[step], &value) == PO_OK);
+      if (field == 0)
+        value.voice_raw ^= 15u;
+      else
+        value.fx_raw ^= 15u;
+      assert(po35_pattern_index_pair_encode(&value, &pattern.index_pairs_raw[step]) == PO_OK);
+      assert(po35_pattern_encode(&pattern, encoded, sizeof(encoded)) == PO_OK);
+      memcpy(expected, original, sizeof(expected));
+      expected[145 + step] ^= field == 0 ? 0x0fu : 0xf0u;
+      assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+    }
+  }
+}
+
+static void test_pattern_index_pair_validation(void) {
+  po35_pattern_index_pair_t value = {5, 3}, before;
+  uint8_t output = 0xa5;
+  assert(po35_pattern_index_pair_decode(0x35, NULL) == PO_ERR_INVALID_ARG);
+  assert(po35_pattern_index_pair_encode(NULL, &output) == PO_ERR_INVALID_ARG);
+  assert(output == 0xa5);
+  assert(po35_pattern_index_pair_encode(&value, NULL) == PO_ERR_INVALID_ARG);
+  for (unsigned int field = 0; field < 2u; ++field) {
+    for (unsigned int invalid = 16; invalid <= UINT8_MAX; ++invalid) {
+      if (field == 0)
+        value.voice_raw = (uint8_t)invalid;
+      else
+        value.fx_raw = (uint8_t)invalid;
+      before = value;
+      assert(po35_pattern_index_pair_encode(&value, &output) == PO_ERR_RANGE);
+      assert(output == 0xa5 && memcmp(&value, &before, sizeof(value)) == 0);
+    }
+    value = (po35_pattern_index_pair_t){5, 3};
+  }
+}
+
+static void test_pattern_scale_values_and_preservation(void) {
+  static const struct {
+    uint8_t raw;
+    po35_pattern_scale_t scale;
+  } captured[] = {
+      {0xa0, PO35_PATTERN_SCALE_MAJOR}, /* Reported -C. */
+      {0x00, PO35_PATTERN_SCALE_MAJOR}, /* Reported C. */
+      {0x60, PO35_PATTERN_SCALE_MAJOR}, /* Reported +C. */
+      {0xa8, PO35_PATTERN_SCALE_MAJOR}, /* Key-only edit of reported -C. */
+      {0x02, PO35_PATTERN_SCALE_BLUES}, {0x63, PO35_PATTERN_SCALE_ARAB},
+      {0xb1, PO35_PATTERN_SCALE_MINOR}, /* Minor-intended take with key cochange. */
+  };
+  po35_pattern_t pattern = {0};
+  for (size_t i = 0; i < sizeof(captured) / sizeof(captured[0]); ++i) {
+    po35_pattern_scale_t scale = PO35_PATTERN_SCALE_MINOR;
+    pattern.tail_raw[0] = captured[i].raw;
+    assert(po35_pattern_scale_get(&pattern, &scale) == PO_OK);
+    assert(scale == captured[i].scale);
+  }
+  for (unsigned int raw = 0; raw <= UINT8_MAX; ++raw) {
+    pattern.tail_raw[0] = (uint8_t)raw;
+    for (unsigned int scale_code = 0; scale_code <= PO35_PATTERN_SCALE_ARAB; ++scale_code) {
+      po35_pattern_scale_t scale;
+      assert(po35_pattern_scale_get(&pattern, &scale) == PO_OK);
+      assert((unsigned int)scale == (pattern.tail_raw[0] & 3u));
+      assert(po35_pattern_scale_set(&pattern, (po35_pattern_scale_t)scale_code) == PO_OK);
+      assert(pattern.tail_raw[0] == ((raw & 0xfcu) | scale_code));
+    }
+  }
+}
+
+static void test_pattern_scale_edit_locality(void) {
+  uint8_t original[PO35_PATTERN_BYTES], expected[PO35_PATTERN_BYTES], encoded[PO35_PATTERN_BYTES];
+  po35_pattern_t pattern;
+  for (size_t i = 0; i < sizeof(original); ++i)
+    original[i] = (uint8_t)(i * 71u + 19u);
+  original[0] = 3;
+  original[177] = 0xa0;
+  assert(po35_pattern_decode(original, sizeof(original), &pattern) == PO_OK);
+  assert(po35_pattern_scale_set(&pattern, PO35_PATTERN_SCALE_MINOR) == PO_OK);
+  assert(po35_pattern_encode(&pattern, encoded, sizeof(encoded)) == PO_OK);
+  memcpy(expected, original, sizeof(expected));
+  expected[177] = 0xa1;
+  assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+}
+
+static void test_pattern_scale_validation(void) {
+  po35_pattern_t pattern, before;
+  po35_pattern_scale_t out = (po35_pattern_scale_t)99;
+  memset(&pattern, 0x5a, sizeof(pattern));
+  before = pattern;
+  assert(po35_pattern_scale_get(NULL, &out) == PO_ERR_INVALID_ARG);
+  assert(out == (po35_pattern_scale_t)99);
+  assert(po35_pattern_scale_get(&pattern, NULL) == PO_ERR_INVALID_ARG);
+  assert(po35_pattern_scale_set(NULL, PO35_PATTERN_SCALE_MINOR) == PO_ERR_INVALID_ARG);
+  assert(po35_pattern_scale_set(&pattern, (po35_pattern_scale_t)-1) == PO_ERR_RANGE);
+  assert(po35_pattern_scale_set(&pattern, (po35_pattern_scale_t)4) == PO_ERR_RANGE);
+  assert(po35_pattern_scale_set(&pattern, (po35_pattern_scale_t)255) == PO_ERR_RANGE);
+  assert(memcmp(&pattern, &before, sizeof(pattern)) == 0);
+}
+
+static void test_pattern_speech_controls_golden_values(void) {
+  po35_pattern_t pattern = {0};
+  const po35_speech_step_controls_t expected_onset = {128, 128, 9, 76};
+  const po35_speech_step_controls_t expected_continuation = {255, 128, 0, 0};
+  po35_speech_step_controls_t actual;
+  const uint8_t onset[4] = {128, 128, 9, 76};
+  const uint8_t continuation[4] = {255, 128, 0, 0};
+  memcpy(pattern.speech_parameters[0], onset, sizeof(onset));
+  memcpy(pattern.speech_parameters[4], continuation, sizeof(continuation));
+  assert(po35_pattern_speech_controls_get(&pattern, 0, &actual) == PO_OK);
+  assert(memcmp(&actual, &expected_onset, sizeof(actual)) == 0);
+  assert(po35_pattern_speech_controls_get(&pattern, 4, &actual) == PO_OK);
+  assert(memcmp(&actual, &expected_continuation, sizeof(actual)) == 0);
+}
+
+static void test_pattern_speech_controls_edit_locality(void) {
+  uint8_t original[PO35_PATTERN_BYTES], expected[PO35_PATTERN_BYTES], encoded[PO35_PATTERN_BYTES];
+  const po35_speech_step_controls_t replacement = {128, 192, 24, 160};
+  for (size_t i = 0; i < sizeof(original); ++i)
+    original[i] = (uint8_t)(i * 71u + 19u);
+  original[0] = 3;
+  for (size_t step = 0; step < PO35_PATTERN_STEP_COUNT; ++step) {
+    po35_pattern_t pattern;
+    po35_speech_step_controls_t actual;
+    assert(po35_pattern_decode(original, sizeof(original), &pattern) == PO_OK);
+    assert(po35_pattern_speech_controls_get(&pattern, step, &actual) == PO_OK);
+    assert(actual.pitch_raw == original[33 + 4 * step]);
+    assert(actual.formant_raw == original[34 + 4 * step]);
+    assert(actual.start_raw == original[35 + 4 * step]);
+    assert(actual.speed_raw == original[36 + 4 * step]);
+    assert(po35_pattern_speech_controls_set(&pattern, step, &replacement) == PO_OK);
+    assert(po35_pattern_encode(&pattern, encoded, sizeof(encoded)) == PO_OK);
+    memcpy(expected, original, sizeof(expected));
+    expected[33 + 4 * step] = 128;
+    expected[34 + 4 * step] = 192;
+    expected[35 + 4 * step] = 24;
+    expected[36 + 4 * step] = 160;
+    assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+  }
+}
+
+static void test_pattern_speech_controls_bounds_and_errors(void) {
+  po35_pattern_t pattern;
+  po35_pattern_t before;
+  po35_speech_step_controls_t value = {0, 255, 0, 255}, out = {0xa5, 0xa5, 0xa5, 0xa5};
+  const po35_speech_step_controls_t sentinel = out;
+  memset(&pattern, 0x5a, sizeof(pattern));
+  assert(po35_pattern_speech_controls_set(&pattern, 15, &value) == PO_OK);
+  assert(po35_pattern_speech_controls_get(&pattern, 15, &out) == PO_OK);
+  assert(memcmp(&out, &value, sizeof(out)) == 0);
+  before = pattern;
+  out = sentinel;
+  assert(po35_pattern_speech_controls_get(NULL, 0, &out) == PO_ERR_INVALID_ARG);
+  assert(po35_pattern_speech_controls_get(&pattern, 0, NULL) == PO_ERR_INVALID_ARG);
+  assert(po35_pattern_speech_controls_get(&pattern, 16, &out) == PO_ERR_RANGE);
+  assert(po35_pattern_speech_controls_get(&pattern, SIZE_MAX, &out) == PO_ERR_RANGE);
+  assert(memcmp(&out, &sentinel, sizeof(out)) == 0);
+  assert(po35_pattern_speech_controls_set(NULL, 0, &value) == PO_ERR_INVALID_ARG);
+  assert(po35_pattern_speech_controls_set(&pattern, 0, NULL) == PO_ERR_INVALID_ARG);
+  assert(po35_pattern_speech_controls_set(&pattern, 16, &value) == PO_ERR_RANGE);
+  assert(po35_pattern_speech_controls_set(&pattern, SIZE_MAX, &value) == PO_ERR_RANGE);
+  assert(memcmp(&pattern, &before, sizeof(pattern)) == 0);
+}
+
 static void test_speech_edit_api_surface(void) {
   static const uint8_t records[PO35_SPEECH_RECORD_BYTES] = {0};
   const po35_speech_edit_t edit = {
@@ -1152,6 +1354,16 @@ int main(void) {
   test_speech_event_byte_preservation();
   test_speech_event_edit_locality();
   test_speech_event_validation();
+  test_pattern_index_pair_golden_values();
+  test_pattern_index_pair_preservation();
+  test_pattern_index_pair_edit_locality();
+  test_pattern_index_pair_validation();
+  test_pattern_scale_values_and_preservation();
+  test_pattern_scale_edit_locality();
+  test_pattern_scale_validation();
+  test_pattern_speech_controls_golden_values();
+  test_pattern_speech_controls_edit_locality();
+  test_pattern_speech_controls_bounds_and_errors();
   test_speech_edit_api_surface();
   test_speech_edit_plan_measurement();
   test_speech_edit_plan_descriptor_failures();
