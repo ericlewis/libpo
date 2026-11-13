@@ -182,26 +182,26 @@ static void test_packet_decode_internals(void) {
   }
 }
 
-static void test_builder_internal_helpers(void) {
-  uint8_t preamble_only[PO32_PREAMBLE_BYTES];
+static void test_builder_invalid_length_rejected(void) {
+  uint8_t frame[256], before[256], byte = 0x12u;
   po32_builder_t builder;
-  uint8_t byte = 0x12u;
   po32_status_t status;
+  uint16_t state;
+  size_t packet_offset = 77u, frame_len = 88u;
 
-  status = po32_builder_write_byte(NULL, byte);
-  assert(status == PO32_ERR_INVALID_ARG);
+  memset(frame, 0xa5, sizeof(frame));
+  po32_builder_init(&builder, frame, sizeof(frame));
+  memcpy(before, frame, sizeof(frame));
+  state = builder.state;
+  builder.length = SIZE_MAX;
 
-  po32_zero(&builder, sizeof(builder));
-  status = po32_builder_write_byte(&builder, byte);
-  assert(status == PO32_ERR_INVALID_ARG);
-
-  po32_builder_init(&builder, preamble_only, sizeof(preamble_only));
-  status = po32_builder_write_byte(&builder, byte);
+  status = po32_builder_append_packet(&builder, PO32_TAG_RESET, &byte, 1u, &packet_offset);
   assert(status == PO32_ERR_BUFFER_TOO_SMALL);
-  status = po32_builder_write_bytes(&builder, &byte, 1u);
+  status = po32_builder_finish(&builder, &frame_len);
   assert(status == PO32_ERR_BUFFER_TOO_SMALL);
-  status = po32_builder_write_state_trailer(&builder, 0x1234u);
-  assert(status == PO32_ERR_BUFFER_TOO_SMALL);
+  assert(builder.length == SIZE_MAX && builder.state == state && !builder.finished);
+  assert(packet_offset == 77u && frame_len == 88u);
+  assert(memcmp(frame, before, sizeof(frame)) == 0);
 }
 
 static void test_final_tail_and_trailer_corruption(void) {
@@ -890,8 +890,8 @@ static void test_demodulator_carrier_magnitude_holds(void) {
 int main(void) {
   test_tag_and_tail_helpers();
   test_packet_decode_internals();
+  test_builder_invalid_length_rejected();
   test_final_tail_and_trailer_corruption();
-  test_builder_internal_helpers();
   test_builder_finish_edge_cases();
   test_public_guard_paths();
   test_decode_internal_helpers();
