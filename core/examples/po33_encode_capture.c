@@ -1,6 +1,7 @@
 /* Edit validated PO-33 templates while preserving raw metadata and references. */
 #include "po33.h"
 #include "po_capture.h"
+#include "po_file_io.h"
 #include "po_stereo_wav.h"
 #include <errno.h>
 #include <stdint.h>
@@ -147,29 +148,6 @@ static int edit_options(int argc, char **argv, edit_t *edits, size_t *count, uin
     edits[(*count)++] = edit;
   }
   return *channel == CHANNEL_UNSET || have_sample;
-}
-static int edit_load_file(const char *path, uint8_t **out, size_t *out_size) {
-  FILE *fp = fopen(path, "rb");
-  long length = 0;
-  uint8_t *data = NULL;
-  int ok = 0;
-  if (!fp)
-    return 0;
-  if (fseek(fp, 0, SEEK_END) || (length = ftell(fp)) < 0 || fseek(fp, 0, SEEK_SET))
-    goto cleanup;
-  data = (uint8_t *)malloc(length ? (size_t)length : 1u);
-  if (!data || fread(data, 1, (size_t)length, fp) != (size_t)length || ferror(fp))
-    goto cleanup;
-  ok = 1;
-cleanup:
-  if (fclose(fp))
-    ok = 0;
-  if (ok) {
-    *out = data;
-    *out_size = (size_t)length;
-  } else
-    free(data);
-  return ok;
 }
 static int edit_collect(const po32_packet_t *packet, void *user) {
   template_t *frame = (template_t *)user;
@@ -334,7 +312,7 @@ static int edit_apply(template_t *frame, edit_t *edit, edit_channel_t channel) {
     }
     region[edit->offset] = edit->value;
   } else if (edit->kind == EDIT_PATTERN) {
-    if (!edit_load_file(edit->path, &file, &replacement_size) || replacement_size != size) {
+    if (!po_frame_read_file(edit->path, &file, &replacement_size) || replacement_size != size) {
       fprintf(stderr, "Pattern %u replacement must contain exactly %zu bytes.\n", edit->index,
               size);
       goto cleanup;
@@ -447,7 +425,7 @@ int main(int argc, char **argv) {
     rc = 2;
     goto cleanup;
   }
-  if (!edit_load_file(argv[1], &input, &input_length)) {
+  if (!po_frame_read_file(argv[1], &input, &input_length)) {
     fprintf(stderr, "Cannot read template frame: %s\n", argv[1]);
     goto cleanup;
   }

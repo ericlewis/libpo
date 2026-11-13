@@ -2,6 +2,7 @@
 #define PO_FRAME_REPORT_H
 
 #include "po_common.h"
+#include "po_file_io.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -60,10 +61,6 @@ typedef struct po_frame_report {
 const char *po_frame_family_name(po_frame_family_t family);
 int po_frame_parse_family(const char *name, po_frame_family_t *family);
 const char *po_frame_status_name(po_status_t status);
-
-/* Load one raw byte file into hosted caller-owned storage. Output pointers are
- * required and are cleared on failure; caller frees bytes after success. */
-int po_frame_read_file(const char *path, uint8_t **out_bytes, size_t *out_length);
 
 /* Collect a report for one explicitly selected family. out must be zeroed or
  * destroyed before use. A parser failure is represented in parser_status and

@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include "po_file_io.h"
 
 /* Replay real workflows with one host resource failure. Parser and codec
  * calls remain real; these wrappers model allocation and file I/O errors. */
@@ -87,23 +88,26 @@ static int host_ferror(FILE *fp) {
   return fp == read_error || ferror(fp);
 }
 
-#define malloc  host_malloc
-#define calloc  host_calloc
-#define fopen   host_fopen
-#define fread   host_fread
-#define fwrite  host_fwrite
-#define fprintf host_fprintf
-#define fseek   host_fseek
-#define ftell   host_ftell
-#define fclose  host_fclose
-#define fgetc   host_fgetc
-#define ferror  host_ferror
-#define main    po33_capture_main
+#define malloc             host_malloc
+#define calloc             host_calloc
+#define fopen              host_fopen
+#define fread              host_fread
+#define fwrite             host_fwrite
+#define fprintf            host_fprintf
+#define fseek              host_fseek
+#define ftell              host_ftell
+#define fclose             host_fclose
+#define fgetc              host_fgetc
+#define ferror             host_ferror
+#define po_frame_read_file host_test_read_file
+#include "../examples/po_file_io.c"
+#define main po33_capture_main
 #include "../examples/po33_decode_capture.c"
 #undef main
 #define main po33_encode_main
 #include "../examples/po33_encode_capture.c"
 #undef main
+#undef po_frame_read_file
 #undef malloc
 #undef calloc
 #undef fopen

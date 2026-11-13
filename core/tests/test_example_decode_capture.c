@@ -149,7 +149,7 @@ static void test_decode_helpers(void) {
     uint8_t *loaded = NULL;
     size_t loaded_len = 0u;
     assert(write_binary_file("decode_capture.bin", bytes, sizeof(bytes)));
-    ok = load_file("decode_capture.bin", &loaded, &loaded_len);
+    ok = po_frame_read_file("decode_capture.bin", &loaded, &loaded_len);
     assert(ok);
     assert(loaded_len == sizeof(bytes));
     assert(memcmp(bytes, loaded, sizeof(bytes)) == 0);
@@ -157,7 +157,7 @@ static void test_decode_helpers(void) {
   }
 
   assert(!write_binary_file("missing-dir/out.bin", "x", 1u));
-  ok = load_file("missing.bin", NULL, NULL);
+  ok = po_frame_read_file("missing.bin", NULL, NULL);
   assert(!ok);
 
   {
@@ -170,19 +170,19 @@ static void test_decode_helpers(void) {
 
   assert(!ensure_directory("missing-parent/decode_capture_dir"));
 
-  /* load_file with valid file + NULL out pointers */
+  /* Shared reader with valid file + NULL out pointers. */
   {
     uint8_t *loaded = NULL;
     size_t loaded_len = 0u;
     int result;
 
-    result = load_file("decode_capture.bin", NULL, &loaded_len);
+    result = po_frame_read_file("decode_capture.bin", NULL, &loaded_len);
     assert(!result);
-    result = load_file("decode_capture.bin", &loaded, NULL);
+    result = po_frame_read_file("decode_capture.bin", &loaded, NULL);
     assert(!result);
   }
 
-  /* load_file with empty file (0-byte) */
+  /* Shared reader with an empty file. */
   {
     FILE *fp = fopen("decode_capture_empty.bin", "wb");
     uint8_t *loaded = NULL;
@@ -191,7 +191,7 @@ static void test_decode_helpers(void) {
 
     assert(fp != NULL);
     fclose(fp);
-    result = load_file("decode_capture_empty.bin", &loaded, &loaded_len);
+    result = po_frame_read_file("decode_capture_empty.bin", &loaded, &loaded_len);
     assert(result);
     assert(loaded_len == 0u);
     free(loaded);
