@@ -267,6 +267,32 @@ po_status_t po35_pattern_scale_set(po35_pattern_t *pattern, po35_pattern_scale_t
   return PO_OK;
 }
 
+po_status_t po35_pattern_key_steps_get(const po35_pattern_t *pattern, int *out_steps) {
+  int steps;
+  if (pattern == NULL || out_steps == NULL)
+    return PO_ERR_INVALID_ARG;
+  if ((pattern->tail_raw[0] & 0x04u) != 0u)
+    return PO_ERR_RANGE;
+  steps = (int)(pattern->tail_raw[0] >> 3);
+  if (steps >= 16)
+    steps -= 32;
+  if (steps < -12 || steps > 12)
+    return PO_ERR_RANGE;
+  *out_steps = steps;
+  return PO_OK;
+}
+
+po_status_t po35_pattern_key_steps_set(po35_pattern_t *pattern, int steps) {
+  unsigned int code;
+  if (pattern == NULL)
+    return PO_ERR_INVALID_ARG;
+  if (steps < -12 || steps > 12 || (pattern->tail_raw[0] & 0x04u) != 0u)
+    return PO_ERR_RANGE;
+  code = (unsigned int)(steps < 0 ? steps + 32 : steps);
+  pattern->tail_raw[0] = (uint8_t)((pattern->tail_raw[0] & 0x07u) | (code << 3));
+  return PO_OK;
+}
+
 po_status_t po35_pattern_speech_controls_get(const po35_pattern_t *pattern, size_t step,
                                              po35_speech_step_controls_t *out) {
   if (pattern == NULL || out == NULL)

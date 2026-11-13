@@ -4,6 +4,7 @@
 #include "po35.h"
 #include "po32.h"
 #include <assert.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -470,6 +471,103 @@ static void test_pattern_scale_validation(void) {
   assert(po35_pattern_scale_set(&pattern, (po35_pattern_scale_t)4) == PO_ERR_RANGE);
   assert(po35_pattern_scale_set(&pattern, (po35_pattern_scale_t)255) == PO_ERR_RANGE);
   assert(memcmp(&pattern, &before, sizeof(pattern)) == 0);
+}
+
+static void test_pattern_key_steps_known_values(void) {
+  static const struct {
+    uint8_t raw;
+    int steps;
+  } cases[] = {
+      {0xa0, -12}, /* User-reported lower C on Major. */
+      {0x00, 0},   /* Center C on Major. */
+      {0x08, 1},   /* C-sharp on Major. */
+      {0x60, 12},  /* Upper C on Major. */
+      {0xa1, -12}, /* Scale bits do not affect the key view. */
+      {0x63, 12},
+  };
+  po35_pattern_t pattern = {0};
+  for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+    int steps = 99;
+    po_status_t status;
+    pattern.tail_raw[0] = cases[i].raw;
+    status = po35_pattern_key_steps_get(&pattern, &steps);
+    assert(status == PO_OK && steps == cases[i].steps);
+  }
+}
+
+static void test_pattern_key_steps_roundtrip(void) {
+  po35_pattern_t pattern = {0};
+  pattern.tail_raw[1] = 0x77;
+  pattern.tail_raw[2] = 0xa5;
+  pattern.tail_raw[3] = 0x5a;
+  for (int expected = -12; expected <= 12; ++expected) {
+    for (unsigned int scale_code = 0; scale_code <= PO35_PATTERN_SCALE_ARAB; ++scale_code) {
+      po35_pattern_scale_t scale;
+      po_status_t status;
+      int actual = 99;
+      unsigned int key_code = (unsigned int)(expected < 0 ? expected + 32 : expected);
+      pattern.tail_raw[0] = (uint8_t)scale_code;
+      status = po35_pattern_key_steps_set(&pattern, expected);
+      assert(status == PO_OK);
+      assert(pattern.tail_raw[0] == (uint8_t)((key_code << 3) | scale_code));
+      status = po35_pattern_key_steps_get(&pattern, &actual);
+      assert(status == PO_OK && actual == expected);
+      status = po35_pattern_scale_get(&pattern, &scale);
+      assert(status == PO_OK && (unsigned int)scale == scale_code);
+      assert(pattern.tail_raw[1] == 0x77 && pattern.tail_raw[2] == 0xa5 &&
+             pattern.tail_raw[3] == 0x5a);
+    }
+  }
+}
+
+static void test_pattern_key_steps_edit_locality(void) {
+  uint8_t original[PO35_PATTERN_BYTES], expected[PO35_PATTERN_BYTES], encoded[PO35_PATTERN_BYTES];
+  po35_pattern_t pattern;
+  po_status_t status;
+  for (size_t i = 0; i < sizeof(original); ++i)
+    original[i] = (uint8_t)(i * 71u + 19u);
+  original[0] = 3;
+  original[177] = PO35_PATTERN_SCALE_BLUES;
+  status = po35_pattern_decode(original, sizeof(original), &pattern);
+  assert(status == PO_OK);
+  status = po35_pattern_key_steps_set(&pattern, 1);
+  assert(status == PO_OK);
+  status = po35_pattern_encode(&pattern, encoded, sizeof(encoded));
+  assert(status == PO_OK);
+  memcpy(expected, original, sizeof(expected));
+  expected[177] = 0x0a;
+  assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+}
+
+static void test_pattern_key_steps_validation(void) {
+  const int invalid_steps[] = {-13, 13, INT_MIN, INT_MAX};
+  po35_pattern_t pattern = {0}, before;
+  int out = 99;
+  po_status_t status;
+  status = po35_pattern_key_steps_get(NULL, &out);
+  assert(status == PO_ERR_INVALID_ARG && out == 99);
+  status = po35_pattern_key_steps_get(&pattern, NULL);
+  assert(status == PO_ERR_INVALID_ARG);
+  status = po35_pattern_key_steps_set(NULL, 0);
+  assert(status == PO_ERR_INVALID_ARG);
+  for (size_t i = 0; i < sizeof(invalid_steps) / sizeof(invalid_steps[0]); ++i) {
+    before = pattern;
+    status = po35_pattern_key_steps_set(&pattern, invalid_steps[i]);
+    assert(status == PO_ERR_RANGE && memcmp(&pattern, &before, sizeof(pattern)) == 0);
+  }
+  for (size_t i = 0; i < 3; ++i) {
+    pattern.tail_raw[0] = i == 0 ? 0x04 : (i == 1 ? 0x68 : 0x98);
+    before = pattern;
+    out = 99;
+    status = po35_pattern_key_steps_get(&pattern, &out);
+    assert(status == PO_ERR_RANGE && out == 99);
+    status = po35_pattern_key_steps_set(&pattern, 0);
+    assert(status == (i == 0 ? PO_ERR_RANGE : PO_OK));
+    if (i == 0)
+      assert(memcmp(&pattern, &before, sizeof(pattern)) == 0);
+    else
+      assert(pattern.tail_raw[0] == 0u);
+  }
 }
 
 static void test_pattern_speech_controls_golden_values(void) {
@@ -1362,6 +1460,10 @@ int main(void) {
   test_pattern_scale_values_and_preservation();
   test_pattern_scale_edit_locality();
   test_pattern_scale_validation();
+  test_pattern_key_steps_known_values();
+  test_pattern_key_steps_roundtrip();
+  test_pattern_key_steps_edit_locality();
+  test_pattern_key_steps_validation();
   test_pattern_speech_controls_golden_values();
   test_pattern_speech_controls_edit_locality();
   test_pattern_speech_controls_bounds_and_errors();
