@@ -420,6 +420,7 @@ static void test_pattern_scale_values_and_preservation(void) {
       {0x60, PO35_PATTERN_SCALE_MAJOR}, /* Reported +C. */
       {0xa8, PO35_PATTERN_SCALE_MAJOR}, /* Key-only edit of reported -C. */
       {0x02, PO35_PATTERN_SCALE_BLUES}, {0x63, PO35_PATTERN_SCALE_ARAB},
+      {0x01, PO35_PATTERN_SCALE_MINOR}, /* C-authored device readback. */
       {0xb1, PO35_PATTERN_SCALE_MINOR}, /* Minor-intended take with key cochange. */
   };
   po35_pattern_t pattern = {0};
