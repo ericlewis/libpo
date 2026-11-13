@@ -186,8 +186,8 @@ typedef struct po35_pattern_index_pair {
   uint8_t fx_raw;    /* High nibble. */
 } po35_pattern_index_pair_t;
 
-/* Pattern-wide scale codes on the tested PO-35. The Minor code follows from
- * the user-confirmed fourth option; no isolated Minor-only edit was captured. */
+/* Pattern-wide scale codes on the tested PO-35. A generated 00 -> 01 scale
+ * edit was accepted and read back on that device; audible mapping is separate. */
 typedef enum po35_pattern_scale {
   PO35_PATTERN_SCALE_MAJOR = 0,
   PO35_PATTERN_SCALE_MINOR = 1,

@@ -212,11 +212,12 @@ Do not import PO-35's independently tested continuation rules into the sampler.
 
 **PO-35 key/scale:** controlled selective readbacks localize both controls to
 pattern byte 177. The observed low-two-bit scale codes are `0=Major`,
-`2=Blues` and `3=Arab`; the user confirms `1=Minor` as the fourth option,
-without an isolated Minor-only byte comparison. An A-only key edit changed
-`A0 -> A8`; a Minor-intended take yielded `B1` with an additional key-bearing
-increment. User-reported −C/C/+C keys appear as `A0/00/60` on
-Major; a later matched C/C-sharp/+C take stored `00/08/60`. Both
+`2=Blues` and `3=Arab`; the user confirms `1=Minor` as the fourth option.
+A C-authored scale-only transfer changed `00 -> 01`, showed End on PO-35 and
+read back with exactly that logical payload difference. An A-only key edit
+changed `A0 -> A8`; an earlier Minor-intended take yielded `B1` with an
+additional key-bearing increment. User-reported −C/C/+C keys appear as
+`A0/00/60` on Major; a later matched C/C-sharp/+C take stored `00/08/60`. Both
 signed-five-bit whole semitones in bits 3..7 and signed-six-bit
 half semitones in bits 2..7 fit because bit 2 is clear in all observed values.
 The reported chromatic range spans roughly two octaves, but does not establish
