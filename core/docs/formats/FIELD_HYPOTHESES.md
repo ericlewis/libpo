@@ -23,7 +23,7 @@ behavior changes follow from this guide.
 | PO-35 `F` when the speech slot changes | Replace the source of an ongoing voice | A stored slot change exists; its playback position/retrigger behavior is unresolved |
 | PO-33 state at 386..401 | Per-pattern retained FX/editor position or cached state | Better fit than a live playhead or occupancy map; update conditions unresolved |
 | PO-33/133 lower parameter fields and numeric scales | Packed pitch/level/filter controls alongside resonance | Resonance storage is independently confirmed on both models; later PO-33 playback constrains transitions, bit 5 and coarse responses without completing field widths or numeric laws |
-| PO-35 footer byte 177 | Packed pattern key and scale | Plausible placement; two bit partitions remain indistinguishable |
+| PO-35 footer byte 177 | Packed pattern key and scale | Physical key and scale edits identify this byte; exact key bit split and units remain unresolved |
 | PO-35 header byte 4 | Sample-associated BPM or timing reference | Better fit than current global BPM; no isolated sample-BPM edit |
 | PO-35 indexed tables | Voice/excitation and performance-effect definitions | Eight-entry organization fits the UI; field widths and most numeric laws unresolved |
 | PO-32 pattern bytes 193..208 | Per-step performance-effect/control state | Independently varying bytes; no complete musical mapping |
@@ -210,11 +210,18 @@ Do not import PO-35's independently tested continuation rules into the sampler.
 
 ### Other speech-family control candidates
 
-**PO-35 key/scale:** byte 177 can be partitioned as signed key shifted by two
-plus two scale bits, or shifted by three plus three low bits. Raw `2A` gives
-key +10 versus +5; `A1` gives -24 versus -12. Both fit because observed bit 2
-is always clear. A musically tidy range is a prior, not proof. One known key
-increment is more informative than many unrelated factory patterns.
+**PO-35 key/scale:** controlled selective readbacks localize both controls to
+pattern byte 177. The observed low-two-bit scale codes are `0=Major`,
+`2=Blues` and `3=Arab`; the user confirms `1=Minor` as the fourth option,
+without an isolated Minor-only byte comparison. An A-only key edit changed
+`A0 -> A8`; a Minor-intended take yielded `B1` with an additional key-bearing
+increment. User-reported −C/C/+C keys appear as `A0/00/60` on
+Major; a later matched C/C-sharp/+C take stored `00/08/60`. Both
+signed-five-bit whole semitones in bits 3..7 and signed-six-bit
+half semitones in bits 2..7 fit because bit 2 is clear in all observed values.
+The reported chromatic range spans roughly two octaves, but does not establish
+whether both C endpoints are distinct options or resolve the storage units.
+See [pattern evidence](PO35.md#pattern-records).
 
 **PO-35 sample BPM:** header byte 4 stays unchanged in a global-tempo-only pair,
 which rejects a direct current-tempo copy. A sample-associated timing reference
