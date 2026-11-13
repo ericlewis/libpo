@@ -8,6 +8,7 @@
 #include "po35_analysis.h"
 #include "po35_synth.h"
 #include "po_capture.h"
+#include "po_file_io.h"
 #include "po_stereo_wav.h"
 #include <assert.h>
 #include <errno.h>
@@ -73,22 +74,25 @@ static int host_ferror(FILE *fp) {
   return fail(ERROR) ? 1 : ferror(fp);
 }
 
-#define malloc  host_malloc
-#define calloc  host_calloc
-#define fopen   host_fopen
-#define fclose  host_fclose
-#define fwrite  host_fwrite
-#define fprintf host_fprintf
-#define fseek   host_fseek
-#define ftell   host_ftell
-#define fread   host_fread
-#define ferror  host_ferror
-#define main    po35_decode_main
+#define malloc             host_malloc
+#define calloc             host_calloc
+#define fopen              host_fopen
+#define fclose             host_fclose
+#define fwrite             host_fwrite
+#define fprintf            host_fprintf
+#define fseek              host_fseek
+#define ftell              host_ftell
+#define fread              host_fread
+#define ferror             host_ferror
+#define po_frame_read_file host_test_read_file
+#include "../examples/po_file_io.c"
+#define main po35_decode_main
 #include "../examples/po35_decode_capture.c"
 #undef main
 #define main po35_encode_main
 #include "../examples/po35_encode_capture.c"
 #undef main
+#undef po_frame_read_file
 #undef malloc
 #undef calloc
 #undef fopen
@@ -185,7 +189,7 @@ static void test_reader_failures(void) {
   int ok;
   const enum failure kinds[] = {OPEN, ALLOC, CLOSE, SEEK, TELL, READ, ERROR};
   save("read.bin", data, sizeof(data));
-  ok = e35_read_file("read.bin", &bytes, &size);
+  ok = host_test_read_file("read.bin", &bytes, &size);
   assert(ok && size == sizeof(data) && !memcmp(data, bytes, size));
   free(bytes);
   for (size_t i = 0; i < sizeof(kinds) / sizeof(kinds[0]); ++i) {
@@ -193,16 +197,16 @@ static void test_reader_failures(void) {
     size = 123;
     reset_faults();
     faults[kinds[i]].fail_at = 1;
-    ok = e35_read_file("read.bin", &bytes, &size);
-    assert(!ok && bytes == NULL && size == 123 && faults[kinds[i]].calls >= 1);
+    ok = host_test_read_file("read.bin", &bytes, &size);
+    assert(!ok && bytes == NULL && size == 0 && faults[kinds[i]].calls >= 1);
   }
   reset_faults();
   faults[SEEK].fail_at = 2;
-  ok = e35_read_file("read.bin", &bytes, &size);
-  assert(!ok && !bytes && size == 123);
+  ok = host_test_read_file("read.bin", &bytes, &size);
+  assert(!ok && !bytes && size == 0);
   reset_faults();
   save("empty.bin", NULL, 0);
-  ok = e35_read_file("empty.bin", &bytes, &size);
+  ok = host_test_read_file("empty.bin", &bytes, &size);
   assert(ok && bytes && size == 0);
   free(bytes);
 }
@@ -412,14 +416,14 @@ static void test_real_commands(char *decoder, char *encoder) {
   assert(status == 1 && !exists("missing.wav"));
   status = run(encode);
   assert(status == 0);
-  ok = e35_read_file("transfer.wav", &bytes, &count);
+  ok = po_frame_read_file("transfer.wav", &bytes, &count);
   assert(ok);
   {
     uint8_t *after = NULL;
     size_t after_count = 0;
     status = run(encode);
     assert(status == 1);
-    ok = e35_read_file("transfer.wav", &after, &after_count);
+    ok = po_frame_read_file("transfer.wav", &after, &after_count);
     assert(ok && count == after_count && !memcmp(bytes, after, count));
     free(after);
     free(bytes);
@@ -427,7 +431,7 @@ static void test_real_commands(char *decoder, char *encoder) {
   }
   status = run(decode);
   assert(status == 0);
-  ok = e35_read_file("decoded/frame.bin", &bytes, &count);
+  ok = po_frame_read_file("decoded/frame.bin", &bytes, &count);
   assert(ok && count == frame_size && !memcmp(bytes, frame, count));
   free(bytes);
   remove_export("decoded");
@@ -480,7 +484,7 @@ static void test_real_commands(char *decoder, char *encoder) {
   }
   {
     char *swapped[] = {decoder, "swapped.wav", "swapped", "--swap", NULL};
-    ok = e35_read_file("transfer.wav", &bytes, &count);
+    ok = po_frame_read_file("transfer.wav", &bytes, &count);
     assert(ok && count > 44);
     for (size_t i = 44; i + 3 < count; i += 4) {
       uint8_t a = bytes[i], b = bytes[i + 1];
@@ -538,7 +542,7 @@ static void test_real_commands(char *decoder, char *encoder) {
     float *pcm;
     size_t samples, rendered;
     po_status_t encoded;
-    ok = e35_read_file("transfer.wav", &bytes, &count);
+    ok = po_frame_read_file("transfer.wav", &bytes, &count);
     assert(ok && count > 44 && (count - 44) % 4 == 0);
     samples = (count - 44) / 4;
     pcm = (float *)malloc(samples * 2 * sizeof(float));
@@ -577,13 +581,13 @@ static void test_real_commands(char *decoder, char *encoder) {
       char *edited[] = {decoder, "edited.wav", "edited", NULL};
       status = run(edited);
       assert(status == 0);
-      ok = e35_read_file("edited/speech-02-header.bin", &bytes, &count);
+      ok = po_frame_read_file("edited/speech-02-header.bin", &bytes, &count);
       assert(ok && count == 9 && bytes[0] == 2 && bytes[1] == 0 && bytes[2] == 3 &&
              bytes[3] == 60 && bytes[4] == 140 && bytes[5] == 1 && bytes[6] == 2 && bytes[7] == 3 &&
              bytes[8] == 4);
       free(bytes);
       bytes = NULL;
-      ok = e35_read_file("edited/pattern-04.bin", &bytes, &count);
+      ok = po_frame_read_file("edited/pattern-04.bin", &bytes, &count);
       assert(ok && count == 1 && bytes[0] == 4);
       free(bytes);
       bytes = NULL;

@@ -1,4 +1,5 @@
 #include "po32.h"
+#include "po_file_io.h"
 #include "po_wav_internal.h"
 
 #include <errno.h>
@@ -54,46 +55,6 @@ static int write_binary_file(const char *path, const void *data, size_t data_len
   return 1;
 }
 
-static int load_file(const char *path, uint8_t **out_data, size_t *out_len) {
-  FILE *fp = fopen(path, "rb");
-  uint8_t *data;
-  long len_long;
-
-  if (fp == NULL || out_data == NULL || out_len == NULL) {
-    if (fp != NULL)
-      fclose(fp);
-    return 0;
-  }
-  if (fseek(fp, 0, SEEK_END) != 0) {
-    fclose(fp);
-    return 0;
-  }
-  len_long = ftell(fp);
-  if (len_long < 0) {
-    fclose(fp);
-    return 0;
-  }
-  if (fseek(fp, 0, SEEK_SET) != 0) {
-    fclose(fp);
-    return 0;
-  }
-
-  data = (uint8_t *)malloc((size_t)len_long);
-  if (data == NULL) {
-    fclose(fp);
-    return 0;
-  }
-  if (fread(data, 1u, (size_t)len_long, fp) != (size_t)len_long) {
-    free(data);
-    fclose(fp);
-    return 0;
-  }
-  fclose(fp);
-  *out_data = data;
-  *out_len = (size_t)len_long;
-  return 1;
-}
-
 static float pcm16_to_float(int16_t value) {
   return (float)value / 32768.0f;
 }
@@ -123,7 +84,7 @@ static int decode_wav(const char *path, wav_data_t *out_wav) {
   float *samples = NULL;
   size_t frame_count;
 
-  if (out_wav == NULL || !load_file(path, &file_data, &file_len)) {
+  if (out_wav == NULL || !po_frame_read_file(path, &file_data, &file_len)) {
     return 0;
   }
   if (file_len < 44u || memcmp(file_data, "RIFF", 4u) != 0 ||

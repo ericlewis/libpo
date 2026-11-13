@@ -292,11 +292,11 @@ static void test_new_audio(void) {
   assert(records[2] != 0);
   unchanged_outside_slot(&before, &after, 2);
   free(wire);
-  status = e35_read_file("output.wav", &saved, &saved_bytes);
+  status = po_frame_read_file("output.wav", &saved, &saved_bytes);
   assert(status);
   status = po35_encode_main(6, argv);
   assert(status != 0);
-  status = e35_read_file("output.wav", &again, &again_bytes);
+  status = po_frame_read_file("output.wav", &again, &again_bytes);
   assert(status);
   assert(saved_bytes == again_bytes && !memcmp(saved, again, saved_bytes));
   free(saved);

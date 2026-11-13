@@ -320,7 +320,7 @@ static void test_cli(const char *root) {
     assert(n == test_length);
     assert(!memcmp(recovered, test_frame, test_length));
   }
-  result = e35_read_file(wav, &audio, &bytes);
+  result = po_frame_read_file(wav, &audio, &bytes);
   assert(result);
   assert(bytes > 44 && audio[22] == 2);
   audio[22] = 1;

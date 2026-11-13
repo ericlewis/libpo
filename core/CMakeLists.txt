@@ -65,6 +65,9 @@ target_include_directories(po32
 
 # examples
 
+add_library(po_file_io STATIC examples/po_file_io.c)
+target_include_directories(po_file_io PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/examples)
+
 add_executable(po32_example examples/po32_example.c)
 target_link_libraries(po32_example PRIVATE po32)
 
@@ -75,7 +78,7 @@ add_executable(po32_pattern_editor examples/po32_pattern_editor.c)
 target_link_libraries(po32_pattern_editor PRIVATE po32)
 
 add_executable(po32_decode_capture examples/po32_decode_capture.c)
-target_link_libraries(po32_decode_capture PRIVATE po32)
+target_link_libraries(po32_decode_capture PRIVATE po32 po_file_io)
 
 add_library(po_capture STATIC examples/po_capture.c)
 target_link_libraries(po_capture PUBLIC po32)
@@ -89,7 +92,7 @@ target_link_libraries(po_stereo_wav PUBLIC po32)
 target_include_directories(po_stereo_wav PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/examples)
 
 add_library(po_frame_report STATIC examples/po_frame_report.c)
-target_link_libraries(po_frame_report PUBLIC po32)
+target_link_libraries(po_frame_report PUBLIC po32 po_file_io)
 target_include_directories(po_frame_report PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/examples)
 
 add_executable(po_inspect examples/po_inspect.c)
@@ -111,7 +114,7 @@ add_executable(po_transfer_verify examples/po_transfer_verify.c)
 target_link_libraries(po_transfer_verify PRIVATE po_capture po_frame_report)
 
 add_executable(po33_encode_capture examples/po33_encode_capture.c)
-target_link_libraries(po33_encode_capture PRIVATE po_capture po_stereo_wav)
+target_link_libraries(po33_encode_capture PRIVATE po_capture po_stereo_wav po_file_io)
 
 # fuzz harnesses
 
@@ -162,12 +165,12 @@ add_test(NAME po33_transmit_tests COMMAND po33_transmit_tests)
 set_tests_properties(po33_transmit_tests PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
 add_executable(po33_edit_tests tests/test_po33_edit.c)
-target_link_libraries(po33_edit_tests PRIVATE po_capture po_stereo_wav)
+target_link_libraries(po33_edit_tests PRIVATE po_capture po_stereo_wav po_file_io)
 add_test(NAME po33_edit_tests COMMAND po33_edit_tests)
 set_tests_properties(po33_edit_tests PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
 add_executable(po33_audio_edit_tests tests/test_po33_audio_edit.c)
-target_link_libraries(po33_audio_edit_tests PRIVATE po_capture po_stereo_wav)
+target_link_libraries(po33_audio_edit_tests PRIVATE po_capture po_stereo_wav po_file_io)
 add_test(NAME po33_audio_edit_tests COMMAND po33_audio_edit_tests)
 set_tests_properties(po33_audio_edit_tests PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
@@ -182,7 +185,7 @@ add_test(NAME po33_output_tests COMMAND po33_output_tests)
 set_tests_properties(po33_output_tests PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
 add_executable(po33_host_coverage_tests tests/test_po33_host_coverage.c)
-target_link_libraries(po33_host_coverage_tests PRIVATE po_capture po_stereo_wav)
+target_link_libraries(po33_host_coverage_tests PRIVATE po_capture po_stereo_wav po_file_io)
 add_test(NAME po33_host_coverage_tests COMMAND po33_host_coverage_tests
   $<TARGET_FILE:po33_encode_capture> $<TARGET_FILE:po33_decode_capture>)
 set_tests_properties(po33_host_coverage_tests PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -310,19 +313,19 @@ add_test(
 add_executable(po35_decode_capture examples/po35_decode_capture.c)
 target_link_libraries(po35_decode_capture PRIVATE po_capture)
 add_executable(po35_encode_capture examples/po35_encode_capture.c)
-target_link_libraries(po35_encode_capture PRIVATE po_capture po_stereo_wav)
+target_link_libraries(po35_encode_capture PRIVATE po_capture po_stereo_wav po_file_io)
 add_executable(po35_example_tests tests/test_po35_examples.c)
-target_link_libraries(po35_example_tests PRIVATE po_capture po_stereo_wav)
+target_link_libraries(po35_example_tests PRIVATE po_capture po_stereo_wav po_file_io)
 add_test(NAME po35_example_tests COMMAND po35_example_tests)
 set_tests_properties(po35_example_tests PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
 add_executable(po35_encoding_tests tests/test_po35_encoding.c)
-target_link_libraries(po35_encoding_tests PRIVATE po_capture po_stereo_wav)
+target_link_libraries(po35_encoding_tests PRIVATE po_capture po_stereo_wav po_file_io)
 add_test(NAME po35_encoding_tests COMMAND po35_encoding_tests)
 set_tests_properties(po35_encoding_tests PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
 add_executable(po35_host_coverage_tests tests/test_po35_host_coverage.c)
-target_link_libraries(po35_host_coverage_tests PRIVATE po_capture po_stereo_wav)
+target_link_libraries(po35_host_coverage_tests PRIVATE po_capture po_stereo_wav po_file_io)
 add_test(NAME po35_host_coverage_tests COMMAND po35_host_coverage_tests
   $<TARGET_FILE:po35_decode_capture> $<TARGET_FILE:po35_encode_capture>)
 set_tests_properties(po35_host_coverage_tests PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

@@ -2,6 +2,7 @@
 #include "po35.h"
 #include "po35_analysis.h"
 #include "po_capture.h"
+#include "po_file_io.h"
 #include "po_stereo_wav.h"
 #include <errno.h>
 #include <stdio.h>
@@ -32,30 +33,6 @@ typedef struct {
   po35_builder_t builder;
   int failed;
 } e35_copy_t;
-
-static int e35_read_file(const char *path, uint8_t **out, size_t *out_length) {
-  FILE *fp = fopen(path, "rb");
-  uint8_t *bytes = NULL;
-  long length = 0;
-  int ok = 0;
-  if (fp == NULL)
-    return 0;
-  if (fseek(fp, 0, SEEK_END) != 0 || (length = ftell(fp)) < 0 || fseek(fp, 0, SEEK_SET) != 0)
-    goto cleanup;
-  bytes = (uint8_t *)malloc(length ? (size_t)length : 1u);
-  if (bytes == NULL || fread(bytes, 1, (size_t)length, fp) != (size_t)length || ferror(fp))
-    goto cleanup;
-  ok = 1;
-cleanup:
-  if (fclose(fp) != 0)
-    ok = 0;
-  if (ok) {
-    *out = bytes;
-    *out_length = (size_t)length;
-  } else
-    free(bytes);
-  return ok;
-}
 
 static int e35_copy_packet(const po_packet_t *packet, void *user) {
   e35_copy_t *copy = (e35_copy_t *)user;
@@ -229,7 +206,7 @@ int main(int argc, char **argv) {
     e35_usage(argv[0]);
     return 2;
   }
-  if (!e35_read_file(argv[1], &frame, &frame_len)) {
+  if (!po_frame_read_file(argv[1], &frame, &frame_len)) {
     fprintf(stderr, "Cannot read input frame.\n");
     goto cleanup;
   }
