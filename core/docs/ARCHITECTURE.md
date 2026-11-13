@@ -65,10 +65,11 @@ transport does not imply shared record layouts or musical field meanings.
 PO-35 uses a double LAR table and double filter state for its 30th-order filter.
 PO-32 retains its own lookup-table math.
 
-PO-35 drum patches reuse `po32_patch_packet_t`, its existing packet codec and
-`po32_synth`; there is no duplicate drum engine. PO-133 and PO-137 use the
-33/35 format families, not separate implementations. A compatible format does
-not identify the physical device that produced a recording.
+PO-35 drum patches reuse `po32_patch_packet_t` and its packet codec. Callers
+can render an isolated patch with `po32_synth`; the library does not schedule
+mixed PO-35 speech-and-drum patterns. PO-133 and PO-137 use the 33/35 format
+families, not separate implementations. A compatible format does not identify
+the physical device that produced a recording.
 
 ## Byte domains and ownership
 
@@ -147,6 +148,8 @@ channels; its capture adapter allocates workspace and calls the core stereo
 receiver. `examples/po_stereo_wav.c` validates family frames, wraps the core
 transmitter in WAV/PCM output, and handles exclusive file creation. The PO-33
 and PO-35 examples collect logical records and export their contents.
+`examples/po_file_io.c` supplies whole-file byte reads to the hosted tools
+for all three families; filesystem access stays outside the core.
 
 `po33_encode_capture` uses the PCM converter for sample replacements. It retains
 WAV input, channel selection and native-rate byte preservation in hosted code,
@@ -180,11 +183,10 @@ is named `libpo`; documented compatibility identifiers retain `libpo32`.
 ## Validation boundaries
 
 Builds, byte-preserving roundtrips and numerical checks do not establish device
-acceptance. Specific PO-33 transfers, parameter comparisons and
-[sample replacement with one-block pool growth](formats/PO33.md#sample-replacement-hardware-validation)
-have hardware evidence. Separate [PO-33 and PO-133 resonance readbacks](formats/PO33.md#resonance-storage-validation)
-confirm control storage and endpoints. These sampler results do not validate
-every generated transfer, maximum capacity, PO-133 sample editing or the
-PO-35/137 family. Unmapped controls remain raw. Speech analysis and
-reconstruction are approximate; neither reproduces the original Bitspeek or
-PO-35 implementation. See [Backup formats](PO_FORMATS.md) for the tested scope.
+acceptance. Specific PO-33/133 control and PO-33 sample edits have hardware
+evidence, as do selected PO-35 pattern edits and readbacks. Those observations
+do not validate every generated transfer or extend to PO-137 playback.
+Unmapped controls remain raw. Speech analysis and reconstruction are
+approximate; neither reproduces the original Bitspeek or PO-35 implementation.
+See [Backup formats](PO_FORMATS.md#limits) for the tested scope and remaining
+device boundaries.

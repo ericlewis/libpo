@@ -143,6 +143,13 @@ candidate, but identical packing or accent semantics do not follow from the
 48-byte resemblance. Keep the raw bits until a controlled mapping establishes
 them.
 
+In a later census of 59 PO-32 and 62 speech-family pattern bodies, 236 PO-32
+lane blocks and 62 PO-35/137 drum blocks shared only the all-zero 48-byte
+block exactly. A controlled PO-35 drum-key edit changed key 1 to key 9 as
+event `01 -> 81` ([hardware evidence](PO35_DRUM_EVENTS.md#hardware-follow-up-drum-key-and-multiplier)).
+Bit 7 participates in the tested PO-35 drum-key selection; PO-32 uses bit 7
+for accent. A shared event decoder or accent-mask rule would misread valid data.
+
 The inactive-event results also matter for editing. A zero low nibble does not
 mean every other bit is disposable. PO-32's semantic typed encoder currently
 normalizes inactive triggers; a common editor must use its raw control view
@@ -218,13 +225,18 @@ unconditionally erase every omitted sound in these tests.
 
 PO-35 has independent evidence for selective exports: its developer documents
 transmitting the active chain and just the speech samples used by it. That
-matches the retained partial captures. It is a related mechanism, not proof
-that an arbitrary PO-35 speech-only frame has been hardware-tested. Source:
-[PO-35 developer's notes](https://soniccharge.com/forum/topic/1060-po-35-secret-powers).
+matches the retained partial captures. The PO-35 also accepted C-authored
+one-`CCB2` pattern transfers without settings, speech, patches or indexed
+tables. A scale-only edit and a separate bit-2 edit both showed End and read
+back their authored Pattern 1 bytes; matched readbacks retained the other
+included records. That is narrow evidence for a scoped pattern update, not
+proof of arbitrary speech-only reception or universal rules for omitted
+patterns. See the [pattern evidence](PO35.md#pattern-key-and-scale) and
+[developer's selective-export notes](https://soniccharge.com/forum/topic/1060-po-35-secret-powers).
 
 The useful shared abstraction is **a stream of typed updates**, with a full
 backup as one possible content set. Frame completeness and bank completeness
-are different. The tested partial sampler behavior does not establish generic
+are different. The tested partial-transfer behavior does not establish generic
 deletion, relocation, shared-pool handling or identical merge rules for every
 record type. Keep sound-only and whole-bank intent explicit in APIs and UI.
 

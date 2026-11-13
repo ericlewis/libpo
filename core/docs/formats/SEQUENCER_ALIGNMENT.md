@@ -102,6 +102,20 @@ PO-35 pitch/morph pair, this makes PO-32's historically named `flag` byte a
 strong pitch-control candidate. The observations do not calibrate its audible
 curve or justify changing the existing API's meaning by assumption.
 
+In the 65 validated PO-32 frames, 17 carry state records. Their first drum-pair
+bytes have 28 distinct values, with `128` at 234/272 positions. Of the 14
+state-bearing frames with active drum steps, ten match the same-slot state byte
+at every active step and four contain per-step differences. That fits defaults
+plus locks, but no labelled nonneutral knob-A/state pair isolates a pitch law:
+all 49 frames with knob messages carry knob-A value `128`.
+
+An older five-point PO-32-format knob transfer series used values
+`1/64/128/192/255` with the same patch data and paired to those same saved
+PO-35 drum-pitch bytes. Those are historical PO-35 readbacks, not PO-32 state
+readbacks; the input/capture pairing was not freshly replayed. The result
+supports the PO-35 pitch-byte role without proving that PO-32's `flag` has the
+same numeric law.
+
 The inspected drum sets contain 211 distinct PO-32 patch bodies and 75
 speech-family patch bodies, with no exact body shared between them. Matching
 control values therefore do not supply a matched same-patch playback test.
@@ -184,6 +198,15 @@ step has the same candidate effect code at 200/226 PO-32 positions and
 150/150 PO-35 positions. The PO-32 exceptions and two PO-35 baseline exceptions
 remain counterexamples to a universal current-code lookup. These counts are
 corpus associations, not probabilities of semantic correctness.
+
+In the expanded distinct-pattern corpus, candidate references point to the
+current step at 67/76 PO-32 and 26/26 PO-35 nonzero-step effect-run onsets.
+Baseline storage differs: all 718 PO-32 code-0 positions are raw `00`, while
+118/842 PO-35 code-7 positions retain a nonzero step reference. Both families
+also have constant-code bars referring to step 15 rather than the current run
+start. These are correlated pattern observations, not authenticated edit
+gestures. A writer that derives baseline or reference bytes from FX codes
+would discard valid retained state.
 
 The official [PO-33 guide](https://teenage.engineering/guides/po-33/en) and
 [PO-35 guide](https://teenage.engineering/guides/po-35/en) place the same four

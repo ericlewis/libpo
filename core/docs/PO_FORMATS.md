@@ -38,7 +38,7 @@ that does not require assigning those bytes a musical role.
 | --- | --- | --- |
 | PO-32 | Mono modem, drum patch parameters, synthesis and pattern editing; lossless state/full-pattern record views | Some per-step/control bits and slot-marker receive behavior; legacy semantic APIs retain chain/trigger limits |
 | PO-33 / PO-133 | Stereo modem, lossless records, sample codec/resampling and shared-pool topology; PO-33 replacement/growth, melodic insertion and copied-sound detachment readbacks/playback | Exact range endpoints and slice mapping, shared-owner relocation, full note/timing/parameter scales, most FX codes and retained-state update rules, maximum storage capacity |
-| PO-35 / PO-137 | Stereo modem, lossless records, speech-group replacement and approximate PCM speech analysis/rendering; shared PO-32 drum patch codec; PO-35 root/tone storage and speech onset, continuation, note/gate playback observations | Indexed voice/effect tables, exact speech gain/noise and synthesis behavior, root acoustic scale and other header metadata, key/scale maps, gate timing, rare events and other control semantics; arbitrary generated speech acceptance |
+| PO-35 / PO-137 | Stereo modem, lossless records, speech-group replacement and approximate PCM speech analysis/rendering; shared PO-32 drum patch codec; PO-35 pattern-scale storage and selected speech-event playback validated on hardware | Indexed voice/effect tables, exact speech gain/noise and synthesis behavior, root acoustic scale and other header metadata, numeric key law and bit-2 function, gate timing, rare events and other control semantics; arbitrary generated speech acceptance |
 
 PO-133 and PO-137 share the inspected 33/35 record grammars, respectively;
 that does not establish identical firmware, audio or physical cross-loading.
@@ -143,5 +143,9 @@ selected test banks have byte-identical device readbacks. The integrated editor'
 [tested replacements](formats/PO33.md#sample-replacement-hardware-validation)
 include growth from 45,056 to 49,152 sample bytes. Those observations do not
 validate every input, other growth sizes, maximum capacity, PO-133 sample-edit
-acceptance or generated PO-35/137 speech. Software roundtrips and physical
-acceptance remain separate evidence.
+acceptance or generated PO-35/137 speech. A PO-35 one-pattern scale edit was
+accepted and read back with its other included payloads unchanged; a separate
+bit-2 edit was stored and changed playback without establishing its numeric
+meaning. These observations do not validate PO-137 hardware or arbitrary
+partial-transfer merges. Software roundtrips and physical acceptance remain
+separate evidence. See the [PO-35 pattern evidence](formats/PO35.md#pattern-key-and-scale).
