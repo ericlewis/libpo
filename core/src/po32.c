@@ -46,7 +46,6 @@ static int po32_memcmp(const void *a, const void *b, size_t n) {
 
 #define PO32_PREAMBLE_FILL         0x55u
 #define PO32_TAIL_MARKER_1         0xC3u
-#define PO32_TAIL_MARKER_2         0x71u
 #define PO32_PARAM_SCALE           65535.0f
 #define PO32_PACKET_HEADER_BYTES   3u
 #define PO32_PACKET_TRAILER_BYTES  2u
@@ -254,32 +253,6 @@ po32_status_t po32_frame_parse(const uint8_t *frame, size_t frame_len,
 }
 
 /* ── frame building ─────────────────────────────────────────────── */
-
-static po32_status_t po32_builder_write_byte(po32_builder_t *builder, uint8_t raw_byte) {
-  if (builder == NULL || builder->buffer == NULL)
-    return PO32_ERR_INVALID_ARG;
-  if (builder->length >= builder->capacity)
-    return PO32_ERR_BUFFER_TOO_SMALL;
-  po_wire_write_byte(builder->buffer, &builder->length, &builder->state, raw_byte);
-  return PO32_OK;
-}
-
-static po32_status_t po32_builder_write_bytes(po32_builder_t *builder, const uint8_t *raw,
-                                              size_t len) {
-  for (size_t i = 0u; i < len; ++i) {
-    po32_status_t status = po32_builder_write_byte(builder, raw[i]);
-    if (status != PO32_OK)
-      return status;
-  }
-  return PO32_OK;
-}
-
-static po32_status_t po32_builder_write_state_trailer(po32_builder_t *builder, uint16_t state) {
-  uint8_t trailer[2];
-  trailer[0] = (uint8_t)(state & 0xFFu);
-  trailer[1] = (uint8_t)((state >> 8) & 0xFFu);
-  return po32_builder_write_bytes(builder, trailer, 2u);
-}
 
 void po32_builder_init(po32_builder_t *builder, uint8_t *buffer, size_t capacity) {
   if (builder == NULL) {
@@ -525,9 +498,6 @@ po32_status_t po32_pattern_trigger_decode(uint8_t lane_index, uint8_t trigger,
 po32_status_t po32_builder_append_packet(po32_builder_t *builder, uint16_t tag_code,
                                          const uint8_t *payload, size_t payload_len,
                                          size_t *packet_offset) {
-  size_t needed;
-  uint8_t header[3];
-
   if (builder == NULL || builder->buffer == NULL) {
     return PO32_ERR_INVALID_ARG;
   }
@@ -544,8 +514,8 @@ po32_status_t po32_builder_append_packet(po32_builder_t *builder, uint16_t tag_c
     return PO32_ERR_RANGE;
   }
 
-  needed = builder->length + PO32_PACKET_OVERHEAD_BYTES + payload_len;
-  if (needed > builder->capacity) {
+  if (builder->length > builder->capacity ||
+      builder->capacity - builder->length < PO32_PACKET_OVERHEAD_BYTES + payload_len) {
     return PO32_ERR_BUFFER_TOO_SMALL;
   }
 
@@ -553,25 +523,13 @@ po32_status_t po32_builder_append_packet(po32_builder_t *builder, uint16_t tag_c
     *packet_offset = builder->length;
   }
 
-  header[0] = (uint8_t)(tag_code & 0xFFu);
-  header[1] = (uint8_t)((tag_code >> 8) & 0xFFu);
-  header[2] = (uint8_t)payload_len;
-
   /* Capacity was validated above — these writes cannot fail. */
-  po32_builder_write_bytes(builder, header, 3u);
-  po32_builder_write_bytes(builder, payload, payload_len);
-  return po32_builder_write_state_trailer(builder, builder->state);
-}
-
-/* Caller must ensure capacity. Only invoked from po32_builder_finish after
-   the capacity pre-check guarantees PO32_FINAL_TAIL_BYTES bytes remain. */
-static void po32_final_tail_emit_special_byte(po32_builder_t *builder) {
-  po_wire_write_special(builder->buffer, &builder->length, &builder->state);
+  po_wire_write_packet(builder->buffer, &builder->length, &builder->state, tag_code, payload,
+                       payload_len);
+  return PO32_OK;
 }
 
 po32_status_t po32_builder_finish(po32_builder_t *builder, size_t *frame_len) {
-  size_t needed;
-
   if (builder == NULL || builder->buffer == NULL) {
     return PO32_ERR_INVALID_ARG;
   }
@@ -585,15 +543,12 @@ po32_status_t po32_builder_finish(po32_builder_t *builder, size_t *frame_len) {
     return PO32_OK;
   }
 
-  needed = builder->length + PO32_FINAL_TAIL_BYTES;
-  if (needed > builder->capacity) {
+  if (builder->length > builder->capacity ||
+      builder->capacity - builder->length < PO32_FINAL_TAIL_BYTES) {
     return PO32_ERR_BUFFER_TOO_SMALL;
   }
 
-  po32_builder_write_byte(builder, PO32_TAIL_MARKER_1);
-  po32_builder_write_byte(builder, PO32_TAIL_MARKER_2);
-  po32_final_tail_emit_special_byte(builder);
-  po32_builder_write_state_trailer(builder, builder->state);
+  po_wire_write_tail(builder->buffer, &builder->length, &builder->state);
 
   builder->finished = 1;
   if (frame_len != NULL) {
