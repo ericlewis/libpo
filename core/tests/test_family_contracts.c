@@ -9,6 +9,64 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef struct patch_pair_capture {
+  po_packet_t packets[2];
+  size_t count;
+} patch_pair_capture_t;
+
+static int collect_patch_pair(const po_packet_t *packet, void *user) {
+  patch_pair_capture_t *capture = user;
+  if (capture->count >= 2u)
+    return 1;
+  capture->packets[capture->count++] = *packet;
+  return 0;
+}
+
+static void test_po35_uses_po32_drum_patch_codec(void) {
+  uint8_t frame[PO35_PREAMBLE_BYTES + 2u * (PO32_PATCH_PAYLOAD_BYTES + PO_WIRE_OVERHEAD_BYTES) +
+                PO_FINAL_TAIL_BYTES];
+  po35_builder_t builder;
+  po35_decode_result_t result;
+  patch_pair_capture_t capture = {0};
+  po32_patch_packet_t patch = {0}, decoded;
+  po_packet_t encoded, reencoded;
+  po_status_t status;
+  size_t frame_len = 0u;
+
+  assert(PO35_TAG_PATCH == PO32_TAG_PATCH);
+  patch.instrument = 3u;
+  patch.params.Level = 0.5f;
+  status = po35_builder_init(&builder, frame, sizeof(frame));
+  assert(status == PO_OK);
+  for (unsigned int side = 0; side < 2u; ++side) {
+    patch.side = side ? PO32_PATCH_RIGHT : PO32_PATCH_LEFT;
+    patch.params.OscFreq = side ? 0.75f : 0.25f;
+    status = po32_packet_encode(PO32_TAG_PATCH, &patch, &encoded);
+    assert(status == PO_OK);
+    assert(encoded.payload_len == PO32_PATCH_PAYLOAD_BYTES);
+    status = po35_builder_append_packet(&builder, encoded.tag_code, encoded.payload,
+                                        encoded.payload_len, NULL);
+    assert(status == PO_OK);
+  }
+  status = po35_builder_finish(&builder, &frame_len);
+  assert(status == PO_OK);
+  assert(frame_len == sizeof(frame));
+  status = po35_frame_parse(frame, frame_len, collect_patch_pair, &capture, &result);
+  assert(status == PO_OK);
+  assert(result.done && result.packet_count == 2u && capture.count == 2u);
+  for (size_t i = 0; i < capture.count; ++i) {
+    const po_packet_t *packet = &capture.packets[i];
+    assert(packet->tag_code == PO35_TAG_PATCH && packet->payload_len == PO32_PATCH_PAYLOAD_BYTES);
+    status = po32_packet_decode(PO32_TAG_PATCH, packet->payload, packet->payload_len, &decoded);
+    assert(status == PO_OK);
+    assert(decoded.instrument == 3u);
+    assert(decoded.side == (i ? PO32_PATCH_RIGHT : PO32_PATCH_LEFT));
+    status = po32_packet_encode(PO32_TAG_PATCH, &decoded, &reencoded);
+    assert(status == PO_OK);
+    assert(memcmp(packet->payload, reencoded.payload, packet->payload_len) == 0);
+  }
+}
+
 static void test_po33_record_errors(void) {
   uint8_t bytes[PO33_PATTERN_BYTES] = {0}, out[PO33_PATTERN_BYTES];
   po33_settings_t settings = {0};
@@ -219,6 +277,7 @@ static void test_checked_wire_helpers(void) {
 }
 
 int main(void) {
+  test_po35_uses_po32_drum_patch_codec();
   test_po33_record_errors();
   test_po35_record_errors();
   test_builders_and_parsers();
