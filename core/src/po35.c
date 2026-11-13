@@ -234,6 +234,65 @@ po_status_t po35_speech_event_encode(const po35_speech_event_t *event, uint8_t *
   return PO_OK;
 }
 
+po_status_t po35_pattern_index_pair_decode(uint8_t raw, po35_pattern_index_pair_t *out) {
+  if (out == NULL)
+    return PO_ERR_INVALID_ARG;
+  out->voice_raw = (uint8_t)(raw & 0x0fu);
+  out->fx_raw = (uint8_t)(raw >> 4);
+  return PO_OK;
+}
+
+po_status_t po35_pattern_index_pair_encode(const po35_pattern_index_pair_t *value, uint8_t *out) {
+  if (value == NULL || out == NULL)
+    return PO_ERR_INVALID_ARG;
+  if (value->voice_raw > 15u || value->fx_raw > 15u)
+    return PO_ERR_RANGE;
+  *out = (uint8_t)((value->fx_raw << 4) | value->voice_raw);
+  return PO_OK;
+}
+
+po_status_t po35_pattern_scale_get(const po35_pattern_t *pattern, po35_pattern_scale_t *out) {
+  if (pattern == NULL || out == NULL)
+    return PO_ERR_INVALID_ARG;
+  *out = (po35_pattern_scale_t)(pattern->tail_raw[0] & 0x03u);
+  return PO_OK;
+}
+
+po_status_t po35_pattern_scale_set(po35_pattern_t *pattern, po35_pattern_scale_t scale) {
+  if (pattern == NULL)
+    return PO_ERR_INVALID_ARG;
+  if ((unsigned int)scale > PO35_PATTERN_SCALE_ARAB)
+    return PO_ERR_RANGE;
+  pattern->tail_raw[0] = (uint8_t)((pattern->tail_raw[0] & 0xfcu) | (uint8_t)scale);
+  return PO_OK;
+}
+
+po_status_t po35_pattern_speech_controls_get(const po35_pattern_t *pattern, size_t step,
+                                             po35_speech_step_controls_t *out) {
+  if (pattern == NULL || out == NULL)
+    return PO_ERR_INVALID_ARG;
+  if (step >= PO35_PATTERN_STEP_COUNT)
+    return PO_ERR_RANGE;
+  out->pitch_raw = pattern->speech_parameters[step][0];
+  out->formant_raw = pattern->speech_parameters[step][1];
+  out->start_raw = pattern->speech_parameters[step][2];
+  out->speed_raw = pattern->speech_parameters[step][3];
+  return PO_OK;
+}
+
+po_status_t po35_pattern_speech_controls_set(po35_pattern_t *pattern, size_t step,
+                                             const po35_speech_step_controls_t *value) {
+  if (pattern == NULL || value == NULL)
+    return PO_ERR_INVALID_ARG;
+  if (step >= PO35_PATTERN_STEP_COUNT)
+    return PO_ERR_RANGE;
+  pattern->speech_parameters[step][0] = value->pitch_raw;
+  pattern->speech_parameters[step][1] = value->formant_raw;
+  pattern->speech_parameters[step][2] = value->start_raw;
+  pattern->speech_parameters[step][3] = value->speed_raw;
+  return PO_OK;
+}
+
 po_status_t po35_speech_record_decode(const uint8_t *data, size_t len, po35_speech_record_t *out) {
   uint16_t pitch;
   if (data == NULL || out == NULL)
