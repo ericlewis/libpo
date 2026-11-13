@@ -557,6 +557,14 @@ static int pool_replacement_group_boundary_valid(const po33_sound_record_t *reco
   return selection_end <= record->data_span.offset;
 }
 
+static int capacity_round(size_t bytes, size_t *out) {
+  if (bytes > SIZE_MAX - (PO33_POOL_ALLOCATION_BLOCK_BYTES - 1u))
+    return 0;
+  *out = ((bytes + PO33_POOL_ALLOCATION_BLOCK_BYTES - 1u) / PO33_POOL_ALLOCATION_BLOCK_BYTES) *
+         PO33_POOL_ALLOCATION_BLOCK_BYTES;
+  return 1;
+}
+
 po_status_t po33_pool_replacement_plan(const po33_sound_record_t *sound_records,
                                        size_t sound_record_count, const po33_pool_t *pools,
                                        size_t pool_count, size_t target_sound_record_index,
@@ -655,15 +663,11 @@ po_status_t po33_pool_replacement_plan(const po33_sound_record_t *sound_records,
   if (result.existing_allocation_fits) {
     result.required_allocation_bytes = result.existing_allocation_bytes;
   } else {
-    if (requested_sample_bytes > SIZE_MAX - (PO33_POOL_ALLOCATION_BLOCK_BYTES - 1u)) {
+    if (!capacity_round(requested_sample_bytes, &result.required_allocation_bytes)) {
       result.reason = PO33_POOL_REPLACEMENT_REASON_REQUIRED_ALLOCATION_OVERFLOW;
       status = PO_ERR_RANGE;
       goto finish;
     }
-    result.required_allocation_bytes =
-        ((requested_sample_bytes + PO33_POOL_ALLOCATION_BLOCK_BYTES - 1u) /
-         PO33_POOL_ALLOCATION_BLOCK_BYTES) *
-        PO33_POOL_ALLOCATION_BLOCK_BYTES;
     result.required_growth_bytes =
         result.required_allocation_bytes - result.existing_allocation_bytes;
   }
@@ -745,14 +749,6 @@ typedef struct po33_capacity_scan {
   uint8_t selectors[256], owners[256], references[256];
   int active, unsafe;
 } po33_capacity_scan_t;
-
-static int capacity_round(size_t bytes, size_t *out) {
-  if (bytes > SIZE_MAX - (PO33_POOL_ALLOCATION_BLOCK_BYTES - 1u))
-    return 0;
-  *out = ((bytes + PO33_POOL_ALLOCATION_BLOCK_BYTES - 1u) / PO33_POOL_ALLOCATION_BLOCK_BYTES) *
-         PO33_POOL_ALLOCATION_BLOCK_BYTES;
-  return 1;
-}
 
 static int capacity_selectors(const po_packet_t *p, void *user) {
   po33_capacity_scan_t *s = user;
@@ -1058,15 +1054,11 @@ static po_status_t pool_edit_plan_internal(const uint8_t *frame, size_t frame_le
   if (replacement.existing_allocation_fits) {
     replacement.required_allocation_bytes = replacement.existing_allocation_bytes;
   } else {
-    if (storage_bytes > SIZE_MAX - (PO33_POOL_ALLOCATION_BLOCK_BYTES - 1u)) {
+    if (!capacity_round(storage_bytes, &replacement.required_allocation_bytes)) {
       replacement.reason = PO33_POOL_REPLACEMENT_REASON_REQUIRED_ALLOCATION_OVERFLOW;
       status = PO_ERR_RANGE;
       goto failure;
     }
-    replacement.required_allocation_bytes =
-        ((storage_bytes + PO33_POOL_ALLOCATION_BLOCK_BYTES - 1u) /
-         PO33_POOL_ALLOCATION_BLOCK_BYTES) *
-        PO33_POOL_ALLOCATION_BLOCK_BYTES;
     replacement.required_growth_bytes =
         replacement.required_allocation_bytes - replacement.existing_allocation_bytes;
   }
@@ -1713,7 +1705,7 @@ po_status_t po33_sample_detach_plan(const uint8_t *frame, size_t frame_len, uint
   po33_detach_scan_t s;
   po33_decode_result_t parsed;
   po_status_t status;
-  size_t blocks, base, added, size;
+  size_t allocation, base, added, size;
   uint8_t source;
   if (plan == NULL ||
       (frame != NULL && po33_ranges_overlap(plan, sizeof(*plan), frame, frame_len)) ||
@@ -1726,7 +1718,8 @@ po_status_t po33_sample_detach_plan(const uint8_t *frame, size_t frame_len, uint
     plan->reason = PO33_SAMPLE_DETACH_REASON_SLOT_OUT_OF_RANGE;
     return PO_ERR_RANGE;
   }
-  if (!sample_bytes || sample_bytes > UINT32_MAX || sample_bytes > SIZE_MAX - 4096u)
+  if (!sample_bytes || sample_bytes > UINT32_MAX ||
+      sample_bytes > SIZE_MAX - PO33_POOL_ALLOCATION_BLOCK_BYTES)
     return PO_ERR_RANGE;
   s.slot = slot;
   s.found = 0;
@@ -1764,12 +1757,9 @@ po_status_t po33_sample_detach_plan(const uint8_t *frame, size_t frame_len, uint
   if (s.target.data_span.length > frame_len)
     return PO_ERR_FRAME;
   base = frame_len - s.target.data_span.length;
-  blocks = (sample_bytes + PO33_POOL_ALLOCATION_BLOCK_BYTES) / PO33_POOL_ALLOCATION_BLOCK_BYTES;
-  if (blocks > (SIZE_MAX - PO33_SOUND_HEADER_BYTES) /
-                   (PO33_POOL_ALLOCATION_BLOCK_BYTES + 17u * PO_WIRE_OVERHEAD_BYTES))
-    return PO_ERR_RANGE;
-  added = PO33_SOUND_HEADER_BYTES +
-          blocks * (PO33_POOL_ALLOCATION_BLOCK_BYTES + 17u * PO_WIRE_OVERHEAD_BYTES);
+  status = sound_record_requirements(sample_bytes, &added, &allocation);
+  if (status != PO_OK)
+    return status;
   if (base > SIZE_MAX - added)
     return PO_ERR_RANGE;
   size = base + added;
@@ -1779,7 +1769,7 @@ po_status_t po33_sample_detach_plan(const uint8_t *frame, size_t frame_len, uint
                                       .required_frame_bytes = size,
                                       .intermediate_frame_bytes = base,
                                       .sample_bytes = sample_bytes,
-                                      .allocation_bytes = blocks * PO33_POOL_ALLOCATION_BLOCK_BYTES,
+                                      .allocation_bytes = allocation,
                                       .target_data_span = s.target.data_span,
                                       .slot = slot,
                                       .source_selector = source};
