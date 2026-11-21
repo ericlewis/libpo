@@ -326,6 +326,19 @@ po_status_t po35_pattern_index_pair_encode(const po35_pattern_index_pair_t *valu
 po_status_t po35_pattern_scale_get(const po35_pattern_t *pattern, po35_pattern_scale_t *out);
 po_status_t po35_pattern_scale_set(po35_pattern_t *pattern, po35_pattern_scale_t scale);
 
+/* Read/write a bounded pattern-wide chromatic key code relative to center C.
+ * The observed -12/0/+1/+12 points are raw A0/00/08/60; intermediate steps
+ * follow the same packing but are not individually device-validated. Accept
+ * -12..12 only when payload byte 177 bit 2 is clear. Getter also rejects
+ * stored values outside this range. The setter changes only bits 3..7,
+ * preserving scale and every other pattern byte. Bit-2-set states stay
+ * available through the raw codec but return PO_ERR_RANGE here. No acoustic
+ * pitch ratio or per-step transposition is implied. Null pointers return
+ * PO_ERR_INVALID_ARG; failures leave outputs unchanged. Input and output
+ * storage must be disjoint. */
+po_status_t po35_pattern_key_steps_get(const po35_pattern_t *pattern, int *out_steps);
+po_status_t po35_pattern_key_steps_set(po35_pattern_t *pattern, int steps);
+
 /* Read/write all four raw speech controls at one zero-based pattern step.
  * The setter changes only speech_parameters[step], preserving every event,
  * other step, FX index, retained state and stored mask. All byte values 0..255

@@ -216,7 +216,8 @@ device-authored C/C-sharp keys differ by `0x08`. An isolated C-authored
 audible envelope from roughly 0.30–0.33 to 0.18–0.19 seconds, but the
 noise-like source yielded no reliable pitch ratio. This does not establish a
 half-semitone, octave, gate or playback-rate law for bit 2. Preserve the byte
-and leave numeric key conversion unexposed. See the
+and use the bounded bit-2-clear chromatic-step helper only for its documented
+range; it does not convert to an acoustic pitch ratio. See the
 [pattern evidence](PO35.md#pattern-key-and-scale) for the captures and limits.
 
 **PO-35 sample BPM:** header byte 4 stays unchanged in a global-tempo-only pair,
