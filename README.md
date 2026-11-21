@@ -42,6 +42,11 @@ The demo round-trips a PO-32 transfer and renders a drum hit.
 
 [Joseph Holland](https://github.com/joseph-holland)
 
+## Acknowledgments
+
+Thanks to [Magnus Lidström](https://github.com/malstrom72) of Sonic Charge,
+creator of Microtonic and co-developer of the PO-32 Tonic, PO-35 Speak, and PO-137.
+
 ## License
 
 [MIT license](LICENSE)
