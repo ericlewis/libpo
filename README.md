@@ -38,4 +38,10 @@ The demo round-trips a PO-32 transfer and renders a drum hit.
 - [PO-PatchStudio](https://squarewave.studio/po-patchstudio) — a PO-32 sound and
   pattern editor with acoustic transfer.
 
-[Contributing](CONTRIBUTING.md) · [MIT license](LICENSE)
+## Contributions
+
+[Joseph Holland](https://github.com/joseph-holland)
+
+## License
+
+[MIT license](LICENSE)
