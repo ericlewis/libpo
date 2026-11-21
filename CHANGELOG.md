@@ -6,22 +6,40 @@ The format is based on Keep a Changelog, and the project follows Semantic Versio
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-21
+
 ### Added
-- Semantic PO-32 patch FX helpers for fixed transforms, coupled pitch changes
-  and EQ snapshots, separate from stored effect codes and sequencer timing.
-- Raw PO-33/133 resonance getter/setter preserving the other parameter and
-  control bits, with hardware-backed endpoint documentation.
-- Lossless PO-35/137 speech-event views for slot, event, note and gate codes,
-  preserving unnamed values and retained inactive state.
-- Standalone PO-33/133 melodic sound-transfer sizing and construction without
-  a source bank, reusing insertion's guard, allocation and packet layout.
+- **PO-32:** Lossless state and pattern codecs for preserving raw controls and
+  longer chains, plus semantic drum-patch FX helpers.
+- **PO-33 / PO-133:** Sample-pool inspection and alias-aware edits, including
+  sample replacement, insertion and detachment; standalone melodic sound
+  transfers; and raw resonance controls.
+- **PO-35 / PO-137:** Transactional speech and indexed-table replacement,
+  lossless speech-event views, and typed pattern controls for scale and
+  bounded stored key steps.
+- **CLI:** Raw-frame inspection and comparison, stereo capture diagnosis and
+  byte-exact transfer readback verification.
 
 ### Changed
 - PO-35/137 PCM analysis model 2 fits selected high-bank LPC coefficients
-  within the existing byte range. New encodes can change coefficient/gain bytes
-  and audio; public API layouts, workspace size, wire layout and synth model 1
-  remain unchanged. Fitting on real speech and physical-device playback remain
-  unverified.
+  within the existing byte range. New encodes can change coefficient/gain
+  bytes and audio. Public layouts, workspace size, wire format and synthesis
+  model 1 are unchanged.
+- Reorganized the README and device guides around getting started, backup
+  workflows and format evidence.
+
+### Fixed
+- Stereo capture decoders recover the first complete checksum-valid transfer
+  after an interrupted attempt in the same recording.
+- Corrected PO-35 speech-count endianness and reject interrupted speech groups.
+
+### Hardware validation
+- Selected PO-33 sample edits and a PO-35 scale-only edit were accepted and
+  read back on hardware. PO-133 resonance storage was checked independently;
+  this does not validate PO-133 sample-edit acceptance.
+- Generated PO-35 key edits have software-loopback evidence only; physical
+  receive and restore readback remain unverified. PO-35/137 speech previews
+  are approximate and arbitrary generated speech is not hardware-validated.
 
 ## [2.0.0] - 2026-11-05
 
